@@ -1,13 +1,14 @@
-#[macro_use]
 extern crate assert_cli;
 #[macro_use]
 extern crate lazy_static;
+extern crate tempdir;
 
 use std::env;
 use std::str;
 use std::path::{Path, PathBuf};
 
-static EMPTY: &'static [&'static str] = &[];
+use tempdir::TempDir;
+
 lazy_static! {
     static ref _CWD: PathBuf = env::current_dir().unwrap();
     static ref CWD: &'static Path = _CWD.as_path();
@@ -16,75 +17,182 @@ lazy_static! {
     static ref BIN: &'static str = _BIN.to_str().unwrap();
 }
 
-macro_rules! assert_contains {
-    ($utf8: expr, $vec: expr) => {
-        let text = str::from_utf8($utf8).unwrap();
-        println!("{}", text);
-        assert!(text.contains($vec))
-    }
-}
-
-macro_rules! assert_contains_not {
-    ($utf8: expr, $vec: expr) => {
-        let text = str::from_utf8($utf8).unwrap();
-        println!("{}", text);
-        assert!(!text.contains($vec))
-    }
-}
-
 #[test]
 pub fn invalid_calls() {
     println!("Binary: {:?}", BIN.to_owned());
-    let output = assert_cli!(&BIN, EMPTY => Error 1).unwrap();
-    assert_contains!(&output.stderr, "requires a subcommand");
+    assert_cli::Assert::command(&[&BIN])
+        .fails()
+        .stderr()
+        .contains("requires a subcommand")
+        .unwrap();
 
-    let output = assert_cli!(&BIN, &["--nonexistent-argument"] => Error 1).unwrap();
-    assert_contains!(&output.stderr,
-                     r"Found argument '--nonexistent-argument' which wasn't expected");
+    assert_cli::Assert::command(&[&BIN, "--nonexistent-argument"])
+        .fails_with(1)
+        .stderr()
+        .contains(r"Found argument '--nonexistent-argument' which wasn't expected")
+        .unwrap();
 }
 
 #[test]
-pub fn log_levels() {
-    env::set_current_dir(CWD.join("tests/fixtures/example")).unwrap();
+pub fn log_levels_trace() {
+    let destdir = TempDir::new("trace").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
 
-    let output1 = assert_cli!(&BIN, &["build", "--trace"] => Success).unwrap();
-    assert_contains!(&output1.stderr, "[trace]");
-    assert_contains!(&output1.stderr, "[debug]");
-    assert_contains!(&output1.stderr, "[info]");
+    assert_cli::Assert::command(&[&BIN, "build", "-L", "trace", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .stderr()
+        .contains("[trace]")
+        .stderr()
+        .contains("[debug]")
+        .stderr()
+        .contains("[info]")
+        .unwrap();
 
-    let output2 = assert_cli!(&BIN, &["build", "-L", "trace"] => Success).unwrap();
-    assert_eq!(output1.stderr, output2.stderr);
+    destdir.close().unwrap();
+}
 
-    let output = assert_cli!(&BIN, &["build", "-L", "debug"] => Success).unwrap();
-    assert_contains_not!(&output.stderr, "[trace]");
-    assert_contains!(&output.stderr, "[debug]");
-    assert_contains!(&output.stderr, "[info]");
+#[test]
+pub fn log_levels_trace_alias() {
+    let destdir = TempDir::new("trace").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
 
-    let output = assert_cli!(&BIN, &["build", "-L", "info"] => Success).unwrap();
-    assert_contains_not!(&output.stderr, "[trace]");
-    assert_contains_not!(&output.stderr, "[debug]");
-    assert_contains!(&output.stderr, "[info]");
+    assert_cli::Assert::command(&[&BIN, "build", "--trace", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .stderr()
+        .contains("[trace]")
+        .stderr()
+        .contains("[debug]")
+        .stderr()
+        .contains("[info]")
+        .unwrap();
 
-    assert_cli!(&BIN, &["build", "--silent"] => Success, "").unwrap();
+    destdir.close().unwrap();
+}
+
+#[test]
+pub fn log_levels_debug() {
+    let destdir = TempDir::new("debug").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
+
+    assert_cli::Assert::command(&[&BIN, "build", "-L", "debug", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .stderr()
+        .doesnt_contain("[trace]")
+        .stderr()
+        .contains("[debug]")
+        .stderr()
+        .contains("[info]")
+        .unwrap();
+
+    destdir.close().unwrap();
+}
+
+#[test]
+pub fn log_levels_info() {
+    let destdir = TempDir::new("info").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
+
+    assert_cli::Assert::command(&[&BIN, "build", "-L", "info", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .stderr()
+        .doesnt_contain("[trace]")
+        .stderr()
+        .doesnt_contain("[debug]")
+        .stderr()
+        .contains("[info]")
+        .unwrap();
+
+    destdir.close().unwrap();
+}
+
+#[test]
+pub fn log_levels_silent() {
+    let destdir = TempDir::new("silent").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
+
+    assert_cli::Assert::command(&[&BIN, "build", "--silent", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .stderr()
+        .is("")
+        .stdout()
+        .is("")
+        .unwrap();
+
+    destdir.close().unwrap();
 }
 
 #[test]
 pub fn clean() {
-    env::set_current_dir(CWD.join("tests/fixtures/example")).unwrap();
-    assert_cli!(&BIN, &["build", "-d", "./test_dest"] => Success).unwrap();
-    assert_eq!(Path::new("./test_dest/").is_dir(), true);
+    let destdir = TempDir::new("clean").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
 
-    let output = assert_cli!(&BIN, &["clean", "-d", "./test_dest"] => Success).unwrap();
-    assert_eq!(Path::new("./test_dest").is_dir(), false);
-    assert_contains!(&output.stderr, "directory \"./test_dest\" removed");
+    assert_cli::Assert::command(&[&BIN, "build", "--trace", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .unwrap();
+    assert_eq!(destdir.path().is_dir(), true);
+
+    assert_cli::Assert::command(&[&BIN, "clean", "--trace", "-d", &dest_param])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .unwrap();
+    assert_eq!(destdir.path().is_dir(), false);
 }
 
 #[cfg(not(windows))]
 #[test]
 pub fn clean_warning() {
-    env::set_current_dir(CWD.join("tests/fixtures/example")).unwrap();
-    let output = assert_cli!(&BIN, &["clean"] => Error 1).unwrap();
-    assert_contains!(&output.stderr,
-                     "Destination directory is same as current directory. Cancelling the \
-                      operation");
+    assert_cli::Assert::command(&[&BIN, "clean"])
+        .current_dir(CWD.join("tests/fixtures/example"))
+        .fails_with(1)
+        .stderr()
+        .contains(
+            "Attempting to delete current directory, Cancelling the \
+              operation",
+        )
+        .unwrap();
+}
+
+#[test]
+pub fn init_project_can_build() {
+    let initdir = TempDir::new("init").expect("Tempdir not created");
+
+    let destdir = TempDir::new("dest").expect("Tempdir not created");
+    let dest_param = destdir
+        .path()
+        .to_str()
+        .expect("Can't convert destdir to str")
+        .to_owned();
+
+    assert_cli::Assert::command(&[&BIN, "init", "--trace"])
+        .current_dir(initdir.path())
+        .unwrap();
+    assert_cli::Assert::command(&[&BIN, "build", "--trace", "--drafts", "-d", &dest_param])
+        .current_dir(initdir.path())
+        .unwrap();
+
+    destdir.close().unwrap();
+    initdir.close().unwrap();
 }

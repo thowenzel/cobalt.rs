@@ -1,95 +1,112 @@
-use std::fs::File;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::path::{Path, PathBuf};
 use std::default::Default;
-use error::Result;
-use chrono::{DateTime, FixedOffset, Datelike, Timelike};
-use yaml_rust::{Yaml, YamlLoader};
-use std::io::Read;
+use std::path::{Path, PathBuf};
+
+use chrono::{Datelike, Timelike};
+use itertools;
+use jsonfeed;
+use liquid;
+use liquid::Value;
+use pulldown_cmark as cmark;
 use regex::Regex;
 use rss;
-use itertools::Itertools;
+use serde_yaml;
 
-#[cfg(all(feature="syntax-highlight", not(windows)))]
-use syntax_highlight::{initialize_codeblock, decorate_markdown};
+use error::*;
+use cobalt_model::files;
+use cobalt_model::slug;
+use cobalt_model;
+use syntax_highlight::decorate_markdown;
+use template;
 
-use liquid::{Renderable, LiquidOptions, Context, Value};
-
-use pulldown_cmark as cmark;
-use liquid;
-
-lazy_static!{
-    static ref DATE_VARIABLES: Regex =
-        Regex::new(":(year|month|i_month|day|i_day|short_year|hour|minute|second)").unwrap();
-    static ref SLUG_INVALID_CHARS: Regex = Regex::new(r"([^a-zA-Z0-9]+)").unwrap();
-    static ref FRONT_MATTER_DIVIDE: Regex = Regex::new(r"---\s*\r?\n").unwrap();
-    static ref MARKDOWN_REF: Regex = Regex::new(r"(?m:^ {0,3}\[[^\]]+\]:.+$)").unwrap();
-}
-
-#[derive(Debug)]
-pub struct Document {
-    pub path: String,
-    pub attributes: HashMap<String, Value>,
-    pub content: String,
-    pub layout: Option<String>,
-    pub is_post: bool,
-    pub is_draft: bool,
-    pub date: Option<DateTime<FixedOffset>>,
-    file_path: String,
-    markdown: bool,
-}
-
-fn read_file<P: AsRef<Path>>(path: P) -> Result<String> {
-    let mut file = try!(File::open(path));
-    let mut text = String::new();
-    try!(file.read_to_string(&mut text));
-    Ok(text)
-}
-
-fn yaml_to_liquid(yaml: &Yaml) -> Option<Value> {
-    match *yaml {
-        Yaml::Real(ref s) |
-        Yaml::String(ref s) => Some(Value::Str(s.to_owned())),
-        Yaml::Integer(i) => Some(Value::Num(i as f32)),
-        Yaml::Boolean(b) => Some(Value::Bool(b)),
-        Yaml::Array(ref a) => Some(Value::Array(a.iter().filter_map(yaml_to_liquid).collect())),
-        Yaml::BadValue | Yaml::Null => None,
-        _ => panic!("Not implemented yet"),
+/// Convert the source file's relative path into a format useful for generating permalinks that
+/// mirror the source directory hierarchy.
+fn format_path_variable(source_file: &Path) -> String {
+    let parent = source_file
+        .parent()
+        .and_then(|p| p.to_str())
+        .unwrap_or("")
+        .to_owned();
+    let mut path = parent.replace("\\", "/");
+    if path.starts_with("./") {
+        path.remove(0);
     }
+    if path.starts_with('/') {
+        path.remove(0);
+    }
+    path
 }
 
-/// Formats a user specified custom path, adding custom parameters
-/// and "exploding" the URL.
-fn format_path(p: &str,
-               attributes: &HashMap<String, Value>,
-               date: &Option<DateTime<FixedOffset>>)
-               -> Result<String> {
-    let mut p = p.to_owned();
+fn permalink_attributes(front: &cobalt_model::Frontmatter, dest_file: &Path) -> liquid::Object {
+    let mut attributes = liquid::Object::new();
 
-    if DATE_VARIABLES.is_match(&p) {
-        let date =
-            try!(date.ok_or(format!("Can not format file path without a valid date ({:?})", p)));
+    attributes.insert("parent".to_owned(),
+                      Value::Str(format_path_variable(dest_file)));
 
-        p = p.replace(":year", &date.year().to_string());
-        p = p.replace(":month", &format!("{:02}", &date.month()));
-        p = p.replace(":i_month", &date.month().to_string());
-        p = p.replace(":day", &format!("{:02}", &date.day()));
-        p = p.replace(":i_day", &date.day().to_string());
-        p = p.replace(":hour", &format!("{:02}", &date.hour()));
-        p = p.replace(":minute", &format!("{:02}", &date.minute()));
-        p = p.replace(":second", &format!("{:02}", &date.second()));
+    let filename = dest_file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    attributes.insert("name".to_owned(), Value::str(filename));
+
+    attributes.insert("ext".to_owned(), Value::str(".html"));
+
+    // TODO(epage): Add `collection` (the collection's slug), see #257
+    // or `parent.slug`, see #323
+
+    attributes.insert("slug".to_owned(), Value::str(&front.slug));
+
+    attributes.insert("categories".to_owned(),
+                      Value::Str(itertools::join(front.categories.iter().map(slug::slugify), "/")));
+
+    if let Some(ref date) = front.published_date {
+        attributes.insert("year".to_owned(), Value::Str(date.year().to_string()));
+        attributes.insert("month".to_owned(),
+                          Value::Str(format!("{:02}", &date.month())));
+        attributes.insert("i_month".to_owned(), Value::Str(date.month().to_string()));
+        attributes.insert("day".to_owned(), Value::Str(format!("{:02}", &date.day())));
+        attributes.insert("i_day".to_owned(), Value::Str(date.day().to_string()));
+        attributes.insert("hour".to_owned(),
+                          Value::Str(format!("{:02}", &date.hour())));
+        attributes.insert("minute".to_owned(),
+                          Value::Str(format!("{:02}", &date.minute())));
+        attributes.insert("second".to_owned(),
+                          Value::Str(format!("{:02}", &date.second())));
     }
 
-    for (key, val) in attributes {
-        p = match *val {
-            Value::Str(ref v) => p.replace(&(String::from(":") + key), v),
-            Value::Num(ref v) => p.replace(&(String::from(":") + key), &v.to_string()),
-            _ => p,
-        }
+    attributes.insert("data".to_owned(), Value::Object(front.data.clone()));
+
+    attributes
+}
+
+fn explode_permalink<S: AsRef<str>>(permalink: S, attributes: &liquid::Object) -> Result<String> {
+    explode_permalink_string(permalink.as_ref(), attributes)
+}
+
+fn explode_permalink_string(permalink: &str, attributes: &liquid::Object) -> Result<String> {
+    lazy_static!{
+       static ref PERMALINK_PARSER: liquid::Parser = liquid::Parser::new();
+    }
+    let p = PERMALINK_PARSER.parse(permalink)?;
+    let mut p = p.render(attributes)?;
+
+    // Handle the user doing windows-style
+    p = p.replace("\\", "/");
+
+    // Handle cases where substutions were blank
+    p = p.replace("//", "/");
+
+    if p.starts_with('/') {
+        p.remove(0);
     }
 
-    let mut path = Path::new(&p);
+    Ok(p)
+}
+
+fn format_url_as_file<S: AsRef<str>>(permalink: S) -> PathBuf {
+    format_url_as_file_str(permalink.as_ref())
+}
+
+fn format_url_as_file_str(permalink: &str) -> PathBuf {
+    let mut path = Path::new(&permalink);
 
     // remove the root prefix (leading slash on unix systems)
     if path.has_root() {
@@ -105,196 +122,147 @@ fn format_path(p: &str,
         path_buf.push("index.html")
     }
 
-    Ok(path_buf.to_string_lossy().into_owned())
+    path_buf
 }
 
-/// The base-name without an extension.  Correlates to Jekyll's :name path tag
-fn file_stem(p: &Path) -> String {
-    p.file_stem().map(|os| os.to_string_lossy().into_owned()).unwrap_or_else(|| "".to_owned())
-}
+fn document_attributes(front: &cobalt_model::Frontmatter,
+                       source_file: &Path,
+                       url_path: &str)
+                       -> liquid::Object {
+    let categories = liquid::Value::Array(front
+                                              .categories
+                                              .iter()
+                                              .map(|c| liquid::Value::str(c))
+                                              .collect());
+    // Reason for `file`:
+    // - Allow access to assets in the original location
+    // - Ease linking back to page's source
+    let file: liquid::Object =
+        vec![("permalink".to_owned(), liquid::Value::str(source_file.to_str().unwrap_or(""))),
+             ("parent".to_owned(),
+              liquid::Value::str(source_file.parent().and_then(Path::to_str).unwrap_or("")))]
+            .into_iter()
+            .collect();
+    let attributes =
+        vec![("permalink".to_owned(), liquid::Value::str(url_path)),
+             ("title".to_owned(), liquid::Value::str(&front.title)),
+             ("description".to_owned(),
+              liquid::Value::str(front.description.as_ref().map(|s| s.as_str()).unwrap_or(""))),
+             ("categories".to_owned(), categories),
+             ("is_draft".to_owned(), liquid::Value::Bool(front.is_draft)),
+             ("file".to_owned(), liquid::Value::Object(file)),
+             ("collection".to_owned(), liquid::Value::str(&front.collection)),
+             ("data".to_owned(), liquid::Value::Object(front.data.clone()))];
+    let mut attributes: liquid::Object = attributes.into_iter().collect();
 
-/// Create a slug for a given file.  Correlates to Jekyll's :slug path tag
-fn slugify(name: &str) -> String {
-    let slug = SLUG_INVALID_CHARS.replace_all(name, "-");
-    slug.trim_matches('-').to_lowercase()
-}
-
-/// Title-case a single word
-fn title_case(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().chain(c.flat_map(|t| t.to_lowercase())).collect(),
+    if let Some(ref published_date) = front.published_date {
+        attributes.insert("published_date".to_owned(),
+                          liquid::Value::Str(published_date.format()));
     }
+
+    attributes
 }
 
-/// Format a user-visible title out of a slug.  Correlates to Jekyll's "title" attribute
-fn titleize_slug(slug: &str) -> String {
-    slug.split('-').map(title_case).join(" ")
+#[derive(Debug)]
+pub struct Document {
+    pub url_path: String,
+    pub file_path: PathBuf,
+    pub content: String,
+    pub attributes: liquid::Object,
+    pub front: cobalt_model::Frontmatter,
 }
 
 impl Document {
-    pub fn new(path: String,
-               attributes: HashMap<String, Value>,
+    pub fn new(url_path: String,
+               file_path: PathBuf,
                content: String,
-               layout: Option<String>,
-               is_post: bool,
-               is_draft: bool,
-               date: Option<DateTime<FixedOffset>>,
-               file_path: String,
-               markdown: bool)
+               attributes: liquid::Object,
+               front: cobalt_model::Frontmatter)
                -> Document {
         Document {
-            path: path,
-            attributes: attributes,
-            content: content,
-            layout: layout,
-            is_post: is_post,
-            is_draft: is_draft,
-            date: date,
+            url_path: url_path,
             file_path: file_path,
-            markdown: markdown,
+            content: content,
+            attributes: attributes,
+            front: front,
         }
     }
 
-    pub fn parse(file_path: &Path,
-                 new_path: &Path,
-                 mut is_post: bool,
-                 post_path: &Option<String>)
+    pub fn parse(src_path: &Path,
+                 rel_path: &Path,
+                 default_front: cobalt_model::FrontmatterBuilder)
                  -> Result<Document> {
-        let mut attributes = HashMap::new();
-        let content = try!(read_file(file_path));
+        trace!("Parsing {:?}", rel_path);
+        let content = files::read_file(src_path)?;
+        let builder =
+            cobalt_model::DocumentBuilder::<cobalt_model::FrontmatterBuilder>::parse(&content)?;
+        let (front, content) = builder.parts();
+        let front = front.merge_path(rel_path).merge(default_front);
 
-        // if there is front matter, split the file and parse it
-        let content = if FRONT_MATTER_DIVIDE.is_match(&content) {
-            let mut splits = FRONT_MATTER_DIVIDE.splitn(&content, 2);
+        let front = front.build()?;
 
-            // above the split are the attributes
-            let attribute_split = splits.next().unwrap_or("");
-
-            // everything below the split becomes the new content
-            let content_split = splits.next().unwrap_or("").to_owned();
-
-            let yaml_result = try!(YamlLoader::load_from_str(attribute_split));
-
-            let yaml_attributes = try!(yaml_result[0]
-                .as_hash()
-                .ok_or(format!("Incorrect front matter format in {:?}", file_path)));
-
-            for (key, value) in yaml_attributes {
-                if let Some(v) = yaml_to_liquid(value) {
-                    attributes.insert(try!(key.as_str().ok_or(format!("Invalid key {:?}", key)))
-                                          .to_owned(),
-                                      v);
-                }
-            }
-
-            content_split
-        } else {
-            content
+        let (file_path, url_path) = {
+            let perma_attributes = permalink_attributes(&front, rel_path);
+            let url_path =
+                explode_permalink(&front.permalink, &perma_attributes)
+                    .chain_err(|| format!("Failed to create permalink `{}`", front.permalink))?;
+            let file_path = format_url_as_file(&url_path);
+            (file_path, url_path)
         };
 
-        if let Value::Bool(val) = *attributes.entry("is_post".to_owned())
-            .or_insert_with(|| Value::Bool(is_post)) {
-            is_post = val;
-        }
+        let doc_attributes = document_attributes(&front, rel_path, url_path.as_ref());
 
-        let is_draft = if let Some(&Value::Bool(true)) = attributes.get("draft") {
-            true
-        } else {
-            false
-        };
-
-        let date = attributes.get("date")
-            .and_then(|d| d.as_str())
-            .and_then(|d| DateTime::parse_from_str(d, "%d %B %Y %H:%M:%S %z").ok());
-
-        let file_stem = file_stem(new_path);
-        let slug = slugify(&file_stem);
-        attributes.entry("title".to_owned())
-            .or_insert_with(|| Value::Str(titleize_slug(slug.as_str())));
-        attributes.entry("slug".to_owned())
-            .or_insert_with(|| Value::Str(slug));
-
-        let mut markdown = false;
-        if let Value::Str(ref ext) =
-            *attributes.entry("ext".to_owned())
-                .or_insert_with(|| {
-                    Value::Str(new_path.extension()
-                        .and_then(|os| os.to_str())
-                        .unwrap_or("")
-                        .to_owned())
-                }) {
-            markdown = ext == "md";
-        }
-
-        let layout = attributes.get("extends").and_then(|l| l.as_str()).map(|x| x.to_owned());
-
-        let mut path_buf = PathBuf::from(new_path);
-        path_buf.set_extension("html");
-
-        // if the user specified a custom path override
-        // format it and push it over the original file name
-        // TODO replace "date", "pretty", "ordinal" and "none"
-        // for Jekyl compatibility
-        if let Some(path) = attributes.get("path").and_then(|p| p.as_str()) {
-            path_buf = PathBuf::from(try!(format_path(path, &attributes, &date)));
-        } else if is_post {
-            // check if there is a global setting for post paths
-            if let Some(ref path) = *post_path {
-                path_buf = PathBuf::from(try!(format_path(path, &attributes, &date)));
-            }
-        };
-
-        let path = try!(path_buf.to_str()
-            .ok_or(format!("Cannot convert pathname {:?} to UTF-8", path_buf)));
-
-        // Swap back slashes to forward slashes to ensure the URL's are valid on Windows
-        attributes.insert("path".to_owned(), Value::Str(path.replace("\\", "/")));
-
-        Ok(Document::new(path.to_owned(),
-                         attributes,
-                         content,
-                         layout,
-                         is_post,
-                         is_draft,
-                         date,
-                         file_path.to_string_lossy().into_owned(),
-                         markdown))
+        Ok(Document::new(url_path,
+                         file_path,
+                         content.to_string(),
+                         doc_attributes,
+                         front))
     }
 
 
     /// Metadata for generating RSS feeds
-    pub fn to_rss(&self, root_url: &str) -> rss::Item {
-        let description = self.attributes
-            .get("description")
-            .or_else(|| self.attributes.get("excerpt"))
-            .or_else(|| self.attributes.get("content"))
-            .and_then(|s| s.as_str())
-            .map(|s| s.to_owned());
+    pub fn to_rss(&self, root_url: &str) -> Result<rss::Item> {
+        let link = format!("{}/{}", root_url, &self.url_path);
+        let guid = rss::GuidBuilder::default()
+            .value(link.clone())
+            .permalink(true)
+            .build()?;
 
-        // Swap back slashes to forward slashes to ensure the URL's are valid on Windows
-        let link = root_url.to_owned() + &self.path.replace("\\", "/");
-        let guid = rss::Guid {
-            value: link.clone(),
-            is_perma_link: true,
-        };
+        let item = rss::ItemBuilder::default()
+            .title(Some(self.front.title.clone()))
+            .link(Some(link))
+            .guid(Some(guid))
+            .pub_date(self.front.published_date.map(|date| date.to_rfc2822()))
+            .description(self.description_to_str())
+            .build()?;
+        Ok(item)
+    }
 
-        rss::Item {
-            title: self.attributes.get("title").and_then(|s| s.as_str()).map(|s| s.to_owned()),
-            link: Some(link),
-            guid: Some(guid),
-            pub_date: self.date.map(|date| date.to_rfc2822()),
-            description: description,
+    /// Metadata for generating JSON feeds
+    pub fn to_jsonfeed(&self, root_url: &str) -> jsonfeed::Item {
+        let link = format!("{}/{}", root_url, &self.url_path);
+
+        jsonfeed::Item {
+            id: link.clone(),
+            url: Some(link),
+            title: Some(self.front.title.clone()),
+            content: jsonfeed::Content::Html(self.description_to_str()
+                                                 .unwrap_or_else(|| "".into())),
+            date_published: self.front.published_date.map(|date| date.to_rfc2822()),
+            // TODO completely implement categories, see Issue 131
+            tags: Some(self.front.categories.clone()),
             ..Default::default()
         }
     }
 
-    /// Prepares liquid context for further rendering.
-    pub fn get_render_context(&self, posts: &[Value]) -> Context {
-        let mut context = Context::with_values(self.attributes.clone());
-        context.set_val("posts", Value::Array(posts.to_vec()));
-        context
+    fn description_to_str(&self) -> Option<String> {
+        self.front
+            .description
+            .as_ref()
+            .map(|s| s.as_str())
+            .or_else(|| self.attributes.get("excerpt").and_then(|s| s.as_str()))
+            .or_else(|| self.attributes.get("content").and_then(|s| s.as_str()))
+            .map(|s| s.to_owned())
     }
 
     /// Renders liquid templates into HTML in the context of current document.
@@ -302,89 +270,62 @@ impl Document {
     /// Takes `content` string and returns rendered HTML. This function doesn't
     /// take `"extends"` attribute into account. This function can be used for
     /// rendering content or excerpt.
-    #[cfg(all(feature="syntax-highlight", not(windows)))]
-    fn render_html(&self, content: &str, context: &mut Context, source: &Path) -> Result<String> {
-        let mut options =
-            LiquidOptions { file_system: Some(source.to_owned()), ..Default::default() };
-        options.blocks.insert("highlight".to_string(), Box::new(initialize_codeblock));
-        let template = try!(liquid::parse(content, options));
-        let mut html = try!(template.render(context)).unwrap_or(String::new());
+    fn render_html(&self,
+                   content: &str,
+                   globals: &liquid::Object,
+                   parser: &template::LiquidParser,
+                   syntax_theme: &str)
+                   -> Result<String> {
+        let template = parser.parse(content)?;
+        let html = template.render(globals)?;
 
-        if self.markdown {
-            html = {
+        let html = match self.front.format {
+            cobalt_model::SourceFormat::Raw => html,
+            cobalt_model::SourceFormat::Markdown => {
                 let mut buf = String::new();
-                let parser = cmark::Parser::new(&html);
-                #[cfg(feature="syntax-highlight")]
-                cmark::html::push_html(&mut buf, decorate_markdown(parser));
-                #[cfg(not(feature="syntax-highlight"))]
-                cmark::html::push_html(&mut buf, parser);
+                let options = cmark::OPTION_ENABLE_FOOTNOTES | cmark::OPTION_ENABLE_TABLES;
+                let parser = cmark::Parser::new_ext(&html, options);
+                cmark::html::push_html(&mut buf, decorate_markdown(parser, syntax_theme));
                 buf
-            };
-        }
-        Ok(html.to_owned())
-    }
-    #[cfg(any(not(feature="syntax-highlight"), windows))]
-    fn render_html(&self, content: &str, context: &mut Context, source: &Path) -> Result<String> {
-        let options = LiquidOptions { file_system: Some(source.to_owned()), ..Default::default() };
-        let template = try!(liquid::parse(content, options));
-        let mut html = try!(template.render(context)).unwrap_or_default();
-
-        if self.markdown {
-            html = {
-                let mut buf = String::new();
-                let parser = cmark::Parser::new(&html);
-                cmark::html::push_html(&mut buf, parser);
-                buf
-            };
-        }
-        Ok(html.to_owned())
-    }
-
-    /// Extracts references iff markdown content.
-    pub fn extract_markdown_references(&self, excerpt_separator: &str) -> String {
-        let mut trail = String::new();
-
-        if self.markdown && MARKDOWN_REF.is_match(&self.content) {
-            for mat in MARKDOWN_REF.find_iter(&self.content) {
-                trail.push_str(&self.content[mat.0..mat.1]);
-                trail.push('\n');
             }
-        }
-        trail +
-        self.content
-            .split(excerpt_separator)
-            .next()
-            .unwrap_or(&self.content)
+        };
+        Ok(html.to_owned())
     }
 
     /// Renders excerpt and adds it to attributes of the document.
     pub fn render_excerpt(&mut self,
-                          context: &mut Context,
-                          source: &Path,
-                          default_excerpt_separator: &str)
+                          globals: &liquid::Object,
+                          parser: &template::LiquidParser,
+                          syntax_theme: &str)
                           -> Result<()> {
-        let excerpt_html = {
-            let excerpt_attr = self.attributes
-                .get("excerpt")
-                .and_then(|attr| attr.as_str());
-
-            let excerpt_separator: &str = self.attributes
-                .get("excerpt_separator")
-                .and_then(|attr| attr.as_str())
-                .unwrap_or(default_excerpt_separator);
-
-            if let Some(excerpt_str) = excerpt_attr {
-                try!(self.render_html(excerpt_str, context, source))
-            } else if excerpt_separator.is_empty() {
-                try!(self.render_html("", context, source))
-            } else {
-                try!(self.render_html(&self.extract_markdown_references(excerpt_separator),
-                                      context,
-                                      source))
-            }
+        let value = if let Some(excerpt_str) = self.front.excerpt.as_ref() {
+            let excerpt = self.render_html(excerpt_str, globals, parser, syntax_theme)?;
+            Value::Str(excerpt)
+        } else if self.front.excerpt_separator.is_empty() {
+            Value::Nil
+        } else {
+            let excerpt = extract_excerpt(&self.content,
+                                          self.front.format,
+                                          &self.front.excerpt_separator);
+            let excerpt = self.render_html(&excerpt, globals, parser, syntax_theme)?;
+            Value::Str(excerpt)
         };
 
-        self.attributes.insert("excerpt".to_owned(), Value::Str(excerpt_html));
+        self.attributes.insert("excerpt".to_owned(), value);
+        Ok(())
+    }
+
+    /// Renders the content and adds it to attributes of the document.
+    ///
+    /// When we say "content" we mean only this document without extended layout.
+    pub fn render_content(&mut self,
+                          globals: &liquid::Object,
+                          parser: &template::LiquidParser,
+                          syntax_theme: &str)
+                          -> Result<()> {
+        let content_html = self.render_html(&self.content, globals, parser, syntax_theme)?;
+        self.attributes
+            .insert("content".to_owned(), Value::Str(content_html.clone()));
         Ok(())
     }
 
@@ -392,60 +333,169 @@ impl Document {
     ///
     /// Side effects:
     ///
-    /// * content is inserted to the attributes of the document
-    /// * content is inserted to context
     /// * layout may be inserted to layouts cache
-    ///
-    /// When we say "content" we mean only this document without extended layout.
     pub fn render(&mut self,
-                  context: &mut Context,
-                  source: &Path,
+                  globals: &liquid::Object,
+                  parser: &template::LiquidParser,
                   layouts_dir: &Path,
                   layouts_cache: &mut HashMap<String, String>)
                   -> Result<String> {
-        let content_html = try!(self.render_html(&self.content, context, source));
-        self.attributes.insert("content".to_owned(), Value::Str(content_html.clone()));
-        context.set_val("content", Value::Str(content_html.clone()));
-
-        if let Some(ref layout) = self.layout {
+        if let Some(ref layout) = self.front.layout {
             let layout_data_ref = match layouts_cache.entry(layout.to_owned()) {
                 Entry::Vacant(vacant) => {
-                    let layout_data = try!(read_file(layouts_dir.join(layout)).map_err(|e| {
-                        format!("Layout {} can not be read (defined in {}): {}",
-                                layout,
-                                self.file_path,
-                                e)
-                    }));
+                    let layout_data = files::read_file(layouts_dir.join(layout))
+                        .map_err(|e| {
+                                     format!("Layout {} can not be read (defined in {:?}): {}",
+                                             layout,
+                                             self.file_path,
+                                             e)
+                                 })?;
                     vacant.insert(layout_data)
                 }
                 Entry::Occupied(occupied) => occupied.into_mut(),
             };
 
-            let options =
-                LiquidOptions { file_system: Some(source.to_owned()), ..Default::default() };
-            let template = try!(liquid::parse(layout_data_ref, options));
-            Ok(try!(template.render(context)).unwrap_or_default())
-        } else {
+            let template = parser
+                .parse(layout_data_ref)
+                .chain_err(|| format!("Failed to parse layout {:?}", layout))?;
+            let content_html = template
+                .render(globals)
+                .chain_err(|| format!("Failed to render layout {:?}", layout))?;
             Ok(content_html)
+        } else {
+            let content_html = globals
+                .get("page")
+                .ok_or("Internal error: page isn't in globals")?
+                .get(&liquid::Index::with_key("content"))
+                .ok_or("Internal error: page.content isn't in globals")?
+                .as_str()
+                .ok_or("Internal error: bad content format")?
+                .to_owned();
+
+            Ok(content_html)
+        }
+    }
+
+    pub fn render_dump(&self, dump: cobalt_model::Dump) -> Result<(String, String)> {
+        match dump {
+            cobalt_model::Dump::DocObject => {
+                let content = serde_yaml::to_string(&self.attributes)?;
+                Ok((content, "yml".to_owned()))
+            }
+            cobalt_model::Dump::DocTemplate => Ok((self.content.clone(), "liquid".to_owned())),
+            cobalt_model::Dump::DocLinkObject => {
+                let perma_attributes = permalink_attributes(&self.front, Path::new("<null>"));
+                let content = serde_yaml::to_string(&perma_attributes)?;
+                Ok((content, "yml".to_owned()))
+            }
+            cobalt_model::Dump::Document => {
+                let cobalt_model = serde_yaml::to_string(&self.front)?;
+                let content = self.content.clone();
+                let ext = match self.front.format {
+                    cobalt_model::SourceFormat::Raw => "liquid",
+                    cobalt_model::SourceFormat::Markdown => "md",
+                }.to_owned();
+                let content = itertools::join(&[cobalt_model, "---".to_owned(), content], "\n");
+                Ok((content, ext))
+            }
         }
     }
 }
 
-#[test]
-fn test_file_stem() {
-    let input = PathBuf::from("/embedded/path/___filE-worlD-__09___.md");
-    let actual = file_stem(input.as_path());
-    assert_eq!(actual, "___filE-worlD-__09___");
+fn extract_excerpt_raw(content: &str, excerpt_separator: &str) -> String {
+    content
+        .split(excerpt_separator)
+        .next()
+        .unwrap_or(content)
+        .to_owned()
 }
 
-#[test]
-fn test_slugify() {
-    let actual = slugify("___filE-worlD-__09___");
-    assert_eq!(actual, "file-world-09");
+fn extract_excerpt_markdown(content: &str, excerpt_separator: &str) -> String {
+    lazy_static!{
+       static ref MARKDOWN_REF: Regex = Regex::new(r"(?m:^ {0,3}\[[^\]]+\]:.+$)").unwrap();
+    }
+
+    let mut trail = String::new();
+
+    if MARKDOWN_REF.is_match(content) {
+        for mat in MARKDOWN_REF.find_iter(content) {
+            trail.push_str(mat.as_str());
+            trail.push('\n');
+        }
+    }
+    trail + content.split(excerpt_separator).next().unwrap_or(content)
 }
 
-#[test]
-fn test_titleize_slug() {
-    let actual = titleize_slug("tItLeIzE-sLuG");
-    assert_eq!(actual, "Titleize Slug");
+fn extract_excerpt(content: &str,
+                   format: cobalt_model::SourceFormat,
+                   excerpt_separator: &str)
+                   -> String {
+    match format {
+        cobalt_model::SourceFormat::Markdown => {
+            extract_excerpt_markdown(content, excerpt_separator)
+        }
+        cobalt_model::SourceFormat::Raw => extract_excerpt_raw(content, excerpt_separator),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn format_path_variable_file() {
+        let input = Path::new("/hello/world/file.liquid");
+        let actual = format_path_variable(input);
+        assert_eq!(actual, "hello/world");
+    }
+
+    #[test]
+    fn format_path_variable_relative() {
+        let input = Path::new("hello/world/file.liquid");
+        let actual = format_path_variable(input);
+        assert_eq!(actual, "hello/world");
+
+        let input = Path::new("./hello/world/file.liquid");
+        let actual = format_path_variable(input);
+        assert_eq!(actual, "hello/world");
+    }
+
+    #[test]
+    fn explode_permalink_relative() {
+        let attributes = liquid::Object::new();
+        let actual = explode_permalink("relative/path", &attributes).unwrap();
+        assert_eq!(actual, "relative/path");
+    }
+
+    #[test]
+    fn explode_permalink_absolute() {
+        let attributes = liquid::Object::new();
+        let actual = explode_permalink("/abs/path", &attributes).unwrap();
+        assert_eq!(actual, "abs/path");
+    }
+
+    #[test]
+    fn explode_permalink_blank_substitution() {
+        let attributes = liquid::Object::new();
+        let actual = explode_permalink("//path/middle//end", &attributes).unwrap();
+        assert_eq!(actual, "path/middle/end");
+    }
+
+    #[test]
+    fn format_url_as_file_absolute() {
+        let actual = format_url_as_file("/hello/world.html");
+        assert_eq!(actual, Path::new("hello/world.html"));
+    }
+
+    #[test]
+    fn format_url_as_file_no_explode() {
+        let actual = format_url_as_file("/hello/world.custom");
+        assert_eq!(actual, Path::new("hello/world.custom"));
+    }
+
+    #[test]
+    fn format_url_as_file_explode() {
+        let actual = format_url_as_file("/hello/world");
+        assert_eq!(actual, Path::new("hello/world/index.html"));
+    }
 }

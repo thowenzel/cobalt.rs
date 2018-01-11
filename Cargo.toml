@@ -1,13 +1,18 @@
 [package]
 
 name = "cobalt-bin"
-version = "0.6.1"
+version = "0.11.1"
 authors = ["Benny Klotz <r3qnbenni@gmail.com>", "Johann Hofmann <mail@johann-hofmann.com>"]
 description = "Static site generator written in Rust"
 repository = "https://github.com/cobalt-org/cobalt.rs"
 readme = "README.md"
 keywords = ["static", "site", "generator"]
+categories = ["command-line-utilities"]
 license = "MIT"
+
+[badges]
+travis-ci = { repository = "cobalt-org/cobalt.rs" }
+appveyor = { repository = "cobalt-org/cobalt.rs" }
 
 [lib]
 name="cobalt"
@@ -17,37 +22,45 @@ name = "cobalt"
 doc = false
 
 [dependencies]
-clap = "2.4.0"
-liquid = "0.9"
-walkdir = "0.1"
-yaml-rust = "0.3"
-chrono = "0.2"
-log = "0.3"
-env_logger = "0.3"
-rss = "0.3.1"
-pulldown-cmark = "0.0.8"
-notify = "^2.5.0"
+clap = "2.24"
+liquid = {version = "0.13", features=["serde"]}
+walkdir = "2.0"
+chrono = "0.4"
+log = "0.3.9"
+env_logger = "0.4"
+rss = "1.1"
+jsonfeed = "0.2"
+pulldown-cmark = {version="0.1", default-features = false}
+notify = "4.0"
 ghp = "0.1"
-glob = "0.2.11"
-regex = "0.1"
+regex = "0.2"
 clippy = {version = "0.0", optional = true}
-error-chain = "0.5.0"
-lazy_static = "0.2"
-itertools = "0.5.9"
+error-chain = "0.11"
+lazy_static = "1.0"
+itertools = "0.7"
+ignore = "0.3"
+serde = "1.0"
+serde_yaml = "0.7"
+serde_json = "1.0"
+toml = "0.4.0"
+
+[dependencies.sass-rs]
+version = "0.2.0"
+optional = true
 
 [dependencies.hyper]
-version = "0.9"
+version = "0.10"
 default-features = false
 
 [dependencies.syntect]
-version = "1.0.4"
+version = "1.8.0"
 optional = true
-features = ["static-onig"]
+default-features = false
+features =  ["parsing", "assets", "html", "static-onig", "dump-load"]
 
 [dev-dependencies]
-assert_cli = "0.3"
-lazy_static = "0.2"
-difference = "0.4"
+assert_cli = "0.5"
+difference = "1.0"
 tempdir = "0.3"
 
 [features]
@@ -56,4 +69,4 @@ unstable = []
 dev = []
 
 syntax-highlight = ["syntect"]
-
+sass = ['sass-rs']

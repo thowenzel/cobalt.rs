@@ -1,7 +1,0 @@
-dest: ./dest
-
-layouts: _my_layouts
-
-posts: _my_posts
-
-ignored_field: is ignored

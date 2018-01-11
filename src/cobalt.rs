@@ -1,214 +1,258 @@
-use std::fs::{self, File};
+use std::fs;
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::{self, Path};
+use std::path::Path;
 use std::ffi::OsStr;
-use liquid::Value;
-use walkdir::{WalkDir, DirEntry, WalkDirIterator};
+use liquid;
+use rss;
+use jsonfeed::Feed;
+use jsonfeed;
+
+use cobalt_model::{Config, SortOrder};
+use cobalt_model::files;
+use cobalt_model;
 use document::Document;
-use error::{ErrorKind, Result};
-use config::Config;
-use chrono::{UTC, FixedOffset};
-use chrono::offset::TimeZone;
-use rss::{Channel, Rss};
-use glob::Pattern;
-
-fn ignore_filter(entry: &DirEntry, source: &Path, ignore: &[Pattern]) -> bool {
-    if compare_paths(entry.path(), source) {
-        return true;
-    }
-    let path = entry.path();
-    let path = path.strip_prefix(&source).unwrap_or(path);
-    let file_name = entry.file_name().to_str().unwrap_or("");
-    if file_name.starts_with('_') || file_name.starts_with('.') {
-        return false;
-    }
-    !ignore.iter().any(|p| p.matches_path(path))
-}
-
-fn compare_paths(a: &Path, b: &Path) -> bool {
-    match (fs::canonicalize(a), fs::canonicalize(b)) {
-        (Ok(p), Ok(p2)) => p == p2,
-        _ => false,
-    }
-}
-
-/// Checks if one path is the starting point of another path.
-fn starts_with_path(this: &Path, starts_with: &Path) -> bool {
-    match (fs::canonicalize(this), fs::canonicalize(starts_with)) {
-        (Ok(p), Ok(p2)) => p.starts_with(p2),
-        _ => false,
-    }
-}
+use error::*;
+use template;
 
 /// The primary build function that transforms a directory into a site
 pub fn build(config: &Config) -> Result<()> {
     trace!("Build configuration: {:?}", config);
 
-    let source = Path::new(&config.source);
-    let dest = Path::new(&config.dest);
+    let source = config.source.as_path();
+    let dest = config.destination.as_path();
 
-    let template_extensions: Vec<&OsStr> = config.template_extensions
-        .iter()
-        .map(OsStr::new)
-        .collect();
+    let template_extensions: Vec<&OsStr> =
+        config.template_extensions.iter().map(OsStr::new).collect();
 
-    let layouts = source.join(&config.layouts);
+    let layouts = source.join(&config.layouts_dir);
     let mut layouts_cache = HashMap::new();
-    let posts_path = source.join(&config.posts);
+    let posts_path = source.join(&config.posts.dir);
 
     debug!("Layouts directory: {:?}", layouts);
     debug!("Posts directory: {:?}", posts_path);
     debug!("Draft mode enabled: {}", config.include_drafts);
-    if config.include_drafts {
-        debug!("Draft directory: {:?}", config.drafts);
-    }
+
+    let parser = template::LiquidParser::with_config(config)?;
 
     let mut documents = vec![];
 
-    let walker = WalkDir::new(&source)
-        .into_iter()
-        .filter_entry(|e| {
-            (ignore_filter(e, source, &config.ignore) || compare_paths(e.path(), &posts_path)) &&
-            !compare_paths(e.path(), dest)
-        })
-        .filter_map(|e| e.ok());
+    let mut page_files = files::FilesBuilder::new(source)?;
+    page_files
+        .add_ignore(&format!("!{}", config.posts.dir))?
+        .add_ignore(&format!("!{}/**", config.posts.dir))?
+        .add_ignore(&format!("{}/**/_*", config.posts.dir))?
+        .add_ignore(&format!("{}/**/_*/**", config.posts.dir))?;
+    for line in &config.ignore {
+        page_files.add_ignore(line.as_str())?;
+    }
+    let page_files = page_files.build()?;
+    for file_path in page_files.files().filter(|p| {
+        template_extensions.contains(&p.extension().unwrap_or_else(|| OsStr::new("")))
+    }) {
+        let rel_src = file_path
+            .strip_prefix(source)
+            .expect("file was found under the root");
 
-    for entry in walker {
-        let entry_path = entry.path();
-        let extension = &entry_path.extension().unwrap_or_else(|| OsStr::new(""));
-        if template_extensions.contains(extension) {
-            // if the document is in the posts folder it's considered a post
-            let is_post =
-                entry_path.parent().map(|p| starts_with_path(p, &posts_path)).unwrap_or(false);
+        // if the document is in the posts folder it's considered a post
+        let is_post = file_path.starts_with(posts_path.as_path());
+        let default_front = if is_post {
+            config.posts.default.clone()
+        } else {
+            config.pages.default.clone()
+        };
 
-            let new_path = entry_path.strip_prefix(source).expect("Entry not in source folder");
-
-            let doc = try!(Document::parse(&entry_path, new_path, is_post, &config.post_path));
-            if !doc.is_draft || config.include_drafts {
-                documents.push(doc);
-            }
+        let doc = Document::parse(&file_path, rel_src, default_front)
+            .chain_err(|| format!("Failed to parse {:?}", rel_src))?;
+        if !doc.front.is_draft || config.include_drafts {
+            documents.push(doc);
         }
     }
 
     if config.include_drafts {
-        let drafts = source.join(&config.drafts);
+        if let Some(ref drafts_dir) = config.posts.drafts_dir {
+            debug!("Draft directory: {:?}", drafts_dir);
+            let drafts_root = source.join(&drafts_dir);
+            let mut draft_files = files::FilesBuilder::new(drafts_root.as_path())?;
+            for line in &config.ignore {
+                draft_files.add_ignore(line.as_str())?;
+            }
+            let draft_files = draft_files.build()?;
+            for file_path in draft_files.files().filter(|p| {
+                template_extensions.contains(&p.extension().unwrap_or_else(|| OsStr::new("")))
+            }) {
+                // Provide a fake path as if it was not a draft
+                let rel_src = file_path
+                    .strip_prefix(&drafts_root)
+                    .expect("file was found under the root");
+                let new_path = Path::new(&config.posts.dir).join(rel_src);
 
-        let walker = WalkDir::new(&drafts)
-            .into_iter()
-            .filter_entry(|e| {
-                (ignore_filter(e, source, &config.ignore) || compare_paths(e.path(), &drafts)) &&
-                !compare_paths(e.path(), dest)
-            })
-            .filter_map(|e| e.ok());
+                let default_front = config.posts.default.clone().set_draft(true);
 
-        for entry in walker {
-            let entry_path = entry.path();
-            let extension = &entry_path.extension().unwrap_or_else(|| OsStr::new(""));
-            let new_path = posts_path
-                .join(entry_path.strip_prefix(&drafts).expect("Draft not in draft folder!"));
-            let new_path = new_path.strip_prefix(source).expect("Entry not in source folder");
-            if template_extensions.contains(extension) {
-                let doc = try!(Document::parse(&entry_path, new_path, true, &config.post_path));
+                let doc = Document::parse(&file_path, &new_path, default_front)
+                    .chain_err(|| format!("Failed to parse {:?}", rel_src))?;
                 documents.push(doc);
             }
         }
     }
 
     // January 1, 1970 0:00:00 UTC, the beginning of time
-    let default_date = UTC.timestamp(0, 0).with_timezone(&FixedOffset::east(0));
+    let default_date = cobalt_model::DateTime::default();
 
-    let (mut posts, documents): (Vec<Document>, Vec<Document>) = documents.into_iter()
-        .partition(|x| x.is_post);
+    let (mut posts, documents): (Vec<Document>, Vec<Document>) =
+        documents
+            .into_iter()
+            .partition(|x| x.front.collection == "posts");
 
     // sort documents by date, if there's no date (none was provided or it couldn't be read) then
     // fall back to the default date
-    posts.sort_by(|a, b| b.date.unwrap_or(default_date).cmp(&a.date.unwrap_or(default_date)));
+    posts.sort_by(|a, b| {
+                      b.front
+                          .published_date
+                          .unwrap_or(default_date)
+                          .cmp(&a.front.published_date.unwrap_or(default_date))
+                  });
+
+    match config.posts.order {
+        SortOrder::Asc => posts.reverse(),
+        SortOrder::Desc => (),
+    }
 
     // collect all posts attributes to pass them to other posts for rendering
-    let simple_posts_data: Vec<Value> = posts.iter()
-        .map(|x| Value::Object(x.attributes.clone()))
+    let simple_posts_data: Vec<liquid::Value> = posts
+        .iter()
+        .map(|x| liquid::Value::Object(x.attributes.clone()))
         .collect();
 
     trace!("Generating posts");
-    for mut post in &mut posts {
-        trace!("Generating {}", post.path);
+    for (i, post) in &mut posts.iter_mut().enumerate() {
+        trace!("Generating {}", post.url_path);
 
-        let mut context = post.get_render_context(&simple_posts_data);
+        // posts are in reverse date order, so previous post is the next in the list (+1)
+        let previous = simple_posts_data
+            .get(i + 1)
+            .cloned()
+            .unwrap_or(liquid::Value::Nil);
+        post.attributes.insert("previous".to_owned(), previous);
+        let next = if i >= 1 {
+            simple_posts_data.get(i - 1)
+        } else {
+            None
+        }.cloned()
+            .unwrap_or(liquid::Value::Nil);
+        post.attributes.insert("next".to_owned(), next);
 
-        try!(post.render_excerpt(&mut context, &source, &config.excerpt_separator));
-        let post_html = try!(post.render(&mut context, &source, &layouts, &mut layouts_cache));
-        try!(create_document_file(&post_html, &post.path, dest));
+        for dump in config.dump.iter().filter(|d| d.is_doc()) {
+            trace!("Dumping {:?}", dump);
+            let (content, ext) = post.render_dump(*dump)?;
+            let mut file_path = post.file_path.clone();
+            let file_name = file_path
+                .file_stem()
+                .and_then(|p| p.to_str())
+                .expect("page must have file name")
+                .to_owned();
+            let file_name = format!("_{}.{}.{}", file_name, dump, ext);
+            file_path.set_file_name(file_name);
+            trace!("Generating {:?}", file_path);
+            files::write_document_file(content, dest.join(file_path))?;
+        }
+
+        // Everything done with `globals` is terrible for performance.  liquid#95 allows us to
+        // improve this.
+        let mut posts_variable = config.posts.attributes.clone();
+        posts_variable.insert("pages".to_owned(),
+                              liquid::Value::Array(simple_posts_data.clone()));
+        let global_collection: liquid::Object = vec![(config.posts.slug.clone(),
+                                                      liquid::Value::Object(posts_variable))]
+            .into_iter()
+            .collect();
+        let mut globals: liquid::Object =
+            vec![("site".to_owned(), liquid::Value::Object(config.site.attributes.clone())),
+                 ("collections".to_owned(), liquid::Value::Object(global_collection))]
+                .into_iter()
+                .collect();
+        globals.insert("page".to_owned(),
+                       liquid::Value::Object(post.attributes.clone()));
+        post.render_excerpt(&globals, &parser, &config.syntax_highlight.theme)
+            .chain_err(|| format!("Failed to render excerpt for {:?}", post.file_path))?;
+        post.render_content(&globals, &parser, &config.syntax_highlight.theme)
+            .chain_err(|| format!("Failed to render content for {:?}", post.file_path))?;
+
+        // Refresh `page` with the `excerpt` / `content` attribute
+        globals.insert("page".to_owned(),
+                       liquid::Value::Object(post.attributes.clone()));
+        let post_html = post.render(&globals, &parser, &layouts, &mut layouts_cache)
+            .chain_err(|| format!("Failed to render for {:?}", post.file_path))?;
+        files::write_document_file(post_html, dest.join(&post.file_path))?;
     }
 
     // check if we should create an RSS file and create it!
-    if let Some(ref path) = config.rss {
-        try!(create_rss(path, dest, &config, &posts));
+    if let Some(ref path) = config.posts.rss {
+        create_rss(path, dest, config, &posts)?;
+    }
+    // check if we should create an jsonfeed file and create it!
+    if let Some(ref path) = config.posts.jsonfeed {
+        create_jsonfeed(path, dest, config, &posts)?;
     }
 
     // during post rendering additional attributes such as content were
     // added to posts. collect them so that non-post documents can access them
-    let posts_data: Vec<Value> = posts.into_iter()
-        .map(|x| Value::Object(x.attributes))
+    let posts_data: Vec<liquid::Value> = posts
+        .into_iter()
+        .map(|x| liquid::Value::Object(x.attributes))
         .collect();
 
     trace!("Generating other documents");
     for mut doc in documents {
-        trace!("Generating {}", doc.path);
+        trace!("Generating {}", doc.url_path);
 
-        let mut context = doc.get_render_context(&posts_data);
-        let doc_html = try!(doc.render(&mut context, &source, &layouts, &mut layouts_cache));
-        try!(create_document_file(&doc_html, &doc.path, dest));
+        for dump in config.dump.iter().filter(|d| d.is_doc()) {
+            trace!("Dumping {:?}", dump);
+            let (content, ext) = doc.render_dump(*dump)?;
+            let mut file_path = doc.file_path.clone();
+            let file_name = file_path
+                .file_stem()
+                .and_then(|p| p.to_str())
+                .expect("page must have file name")
+                .to_owned();
+            let file_name = format!("_{}.{}.{}", file_name, dump, ext);
+            file_path.set_file_name(file_name);
+            trace!("Generating {:?}", file_path);
+            files::write_document_file(content, dest.join(file_path))?;
+        }
+
+        let mut posts_variable = config.posts.attributes.clone();
+        posts_variable.insert("pages".to_owned(), liquid::Value::Array(posts_data.clone()));
+        let global_collection: liquid::Object = vec![(config.posts.slug.clone(),
+                                                      liquid::Value::Object(posts_variable))]
+            .into_iter()
+            .collect();
+        let mut globals: liquid::Object =
+            vec![("site".to_owned(), liquid::Value::Object(config.site.attributes.clone())),
+                 ("collections".to_owned(), liquid::Value::Object(global_collection))]
+                .into_iter()
+                .collect();
+        globals.insert("page".to_owned(),
+                       liquid::Value::Object(doc.attributes.clone()));
+        doc.render_excerpt(&globals, &parser, &config.syntax_highlight.theme)
+            .chain_err(|| format!("Failed to render excerpt for {:?}", doc.file_path))?;
+        doc.render_content(&globals, &parser, &config.syntax_highlight.theme)
+            .chain_err(|| format!("Failed to render content for {:?}", doc.file_path))?;
+
+        // Refresh `page` with the `excerpt` / `content` attribute
+        globals.insert("page".to_owned(),
+                       liquid::Value::Object(doc.attributes.clone()));
+        let doc_html = doc.render(&globals, &parser, &layouts, &mut layouts_cache)
+            .chain_err(|| format!("Failed to render for {:?}", doc.file_path))?;
+        files::write_document_file(doc_html, dest.join(doc.file_path))?;
     }
 
     // copy all remaining files in the source to the destination
-    if !compare_paths(source, dest) {
-        info!("Copying remaining assets");
-        let source_str = try!(source.to_str()
-            .ok_or(format!("Cannot convert pathname {:?} to UTF-8", source)));
+    // compile SASS along the way
+    {
+        debug!("Copying remaining assets");
 
-        let walker = WalkDir::new(&source)
-            .into_iter()
-            .filter_entry(|e| {
-                ignore_filter(e, source, &config.ignore) &&
-                !template_extensions.contains(&e.path()
-                    .extension()
-                    .unwrap_or_else(|| OsStr::new(""))) &&
-                !compare_paths(e.path(), dest)
-            })
-            .filter_map(|e| e.ok());
-
-        for entry in walker {
-            let entry_path = try!(entry.path()
-                .to_str()
-                .ok_or(format!("Cannot convert pathname {:?} to UTF-8", entry.path())));
-
-            let relative = if source_str == "." {
-                entry_path
-            } else {
-                try!(entry_path.split(source_str)
-                    .last()
-                    .map(|s| s.trim_left_matches(path::MAIN_SEPARATOR))
-                    .ok_or("Empty path"))
-            };
-
-            if try!(entry.metadata()).is_dir() {
-                try!(fs::create_dir_all(&dest.join(relative)));
-                debug!("Created new directory {:?}", dest.join(relative));
-            } else {
-                if let Some(parent) = Path::new(relative).parent() {
-                    try!(fs::create_dir_all(&dest.join(parent)));
-                }
-
-                try!(fs::copy(entry.path(), &dest.join(relative)).map_err(|e| {
-                    format!("Could not copy {:?} into {:?}: {}",
-                            entry.path(),
-                            dest.join(relative),
-                            e)
-                }));
-                debug!("Copied {:?} to {:?}", entry.path(), dest.join(relative));
-            }
-        }
+        config.assets.populate(dest)?;
     }
 
     Ok(())
@@ -216,70 +260,80 @@ pub fn build(config: &Config) -> Result<()> {
 
 // creates a new RSS file with the contents of the site blog
 fn create_rss(path: &str, dest: &Path, config: &Config, posts: &[Document]) -> Result<()> {
-    match (&config.name, &config.description, &config.link) {
-        // these three fields are mandatory in the RSS standard
-        (&Some(ref name), &Some(ref description), &Some(ref link)) => {
-            trace!("Generating RSS data");
+    let rss_path = dest.join(path);
+    debug!("Creating RSS file at {}", rss_path.display());
 
-            let items = posts.iter()
-                .map(|doc| doc.to_rss(link))
-                .collect();
+    let title = &config.posts.title;
+    let description = config
+        .posts
+        .description
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or("");
+    let link = config
+        .site
+        .base_url
+        .as_ref()
+        .ok_or(ErrorKind::ConfigFileMissingFields)?;
 
-            let channel = Channel {
-                title: name.to_owned(),
-                link: link.to_owned(),
-                description: description.to_owned(),
-                items: items,
-                ..Default::default()
-            };
+    let items: Result<Vec<rss::Item>> = posts.iter().map(|doc| doc.to_rss(link)).collect();
+    let items = items?;
 
-            let rss = Rss(channel);
-            let rss_string = rss.to_string();
-            trace!("RSS data: {}", rss_string);
+    let channel = rss::ChannelBuilder::default()
+        .title(title.to_owned())
+        .link(link.to_owned())
+        .description(description.to_owned())
+        .items(items)
+        .build()?;
 
-            let rss_path = dest.join(path);
-
-            let mut rss_file = try!(File::create(&rss_path));
-            try!(rss_file.write_all(&rss_string.into_bytes()));
-
-            info!("Created RSS file at {}", rss_path.display());
-            Ok(())
-        }
-        _ => Err(ErrorKind::ConfigFileMissingFields.into()),
-    }
-}
-
-fn create_document_file<T: AsRef<Path>, R: AsRef<Path>>(content: &str,
-                                                        path: T,
-                                                        dest: R)
-                                                        -> Result<()> {
-    // construct target path
-    let file_path = dest.as_ref().join(path);
+    let rss_string = channel.to_string();
+    trace!("RSS data: {}", rss_string);
 
     // create target directories if any exist
-    if let Some(parent) = file_path.parent() {
-        try!(fs::create_dir_all(parent)
-            .map_err(|e| format!("Could not create {:?}: {}", parent, e)));
+    if let Some(parent) = rss_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {:?}: {}", parent, e))?;
     }
 
-    let mut file = try!(File::create(&file_path)
-        .map_err(|e| format!("Could not create {:?}: {}", file_path, e)));
+    let mut rss_file = fs::File::create(&rss_path)?;
+    rss_file
+        .write_all(br#"<?xml version="1.0" encoding="UTF-8"?>"#)?;
+    rss_file.write_all(&rss_string.into_bytes())?;
+    rss_file.write_all(b"\n")?;
 
-    try!(file.write_all(&content.as_bytes()));
-    info!("Created {}", file_path.display());
     Ok(())
 }
 
-// The tests are taken from tests/fixtures/`posts_in_subfolder`/
-#[test]
-fn test_starts_with_path() {
-    let posts_folder = Path::new("tests/fixtures/posts_in_subfolder/posts");
+// creates a new jsonfeed file with the contents of the site blog
+fn create_jsonfeed(path: &str, dest: &Path, config: &Config, posts: &[Document]) -> Result<()> {
+    let jsonfeed_path = dest.join(path);
+    debug!("Creating jsonfeed file at {}", jsonfeed_path.display());
 
-    assert!(!starts_with_path(Path::new("tests/fixtures/posts_in_subfolder"), posts_folder));
-    assert!(starts_with_path(Path::new("tests/fixtures/posts_in_subfolder/posts"),
-                             posts_folder));
-    assert!(starts_with_path(Path::new("tests/fixtures/posts_in_subfolder/posts/20170103"),
-                             posts_folder));
-    assert!(starts_with_path(Path::new("tests/fixtures/posts_in_subfolder/posts/2017/01/08"),
-                             posts_folder));
+    let title = &config.posts.title;
+    let description = config
+        .posts
+        .description
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or("");
+    let link = config
+        .site
+        .base_url
+        .as_ref()
+        .ok_or(ErrorKind::ConfigFileMissingFields)?;
+
+    let jsonitems = posts.iter().map(|doc| doc.to_jsonfeed(link)).collect();
+
+    let feed = Feed {
+        title: title.to_string(),
+        items: jsonitems,
+        home_page_url: Some(link.to_string()),
+        description: Some(description.to_string()),
+        ..Default::default()
+    };
+
+    let jsonfeed_string = jsonfeed::to_string(&feed).unwrap();
+    files::write_document_file(jsonfeed_string, jsonfeed_path)?;
+
+    Ok(())
 }
