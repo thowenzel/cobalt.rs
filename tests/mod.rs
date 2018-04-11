@@ -65,9 +65,11 @@ fn assert_dirs_eq(expected: &Path, actual: &Path) {
             .expect("Comparison error");
         let src_file = Path::new(actual).join(&extra_file);
 
-        File::open(&src_file).expect(&format!("File {:?} does not exist in reference ({:?}).",
-                                              entry.path(),
-                                              src_file));
+        File::open(&src_file).expect(&format!(
+            "File {:?} does not exist in reference ({:?}).",
+            entry.path(),
+            src_file
+        ));
     }
 }
 
@@ -78,21 +80,18 @@ fn run_test(name: &str) -> Result<(), cobalt::Error> {
     let destdir = TempDir::new(name).expect("Tempdir not created");
 
     config.source = "./".to_owned();
-    config.abs_dest = Some(destdir
-                               .path()
-                               .to_str()
-                               .expect("Can't convert destdir to str")
-                               .to_owned());
+    config.abs_dest = Some(destdir.path().to_owned());
 
     let config = config.build()?;
+    let destination = config.destination.clone();
 
     // try to create the target directory, ignore errors
-    fs::create_dir_all(&config.destination).is_ok();
+    fs::create_dir_all(&destination).is_ok();
 
-    let result = cobalt::build(&config);
+    let result = cobalt::build(config);
 
     if result.is_ok() {
-        assert_dirs_eq(&config.destination, &target);
+        assert_dirs_eq(&destination, &target);
     }
 
     // clean up
@@ -166,8 +165,10 @@ pub fn incomplete_rss() {
     assert!(err.is_err());
 
     let err = err.unwrap_err();
-    assert_eq!(format!("{}", err),
-               "name, description and link need to be defined in the config file to generate RSS");
+    assert_eq!(
+        format!("{}", err),
+        "name, description and link need to be defined in the config file to generate RSS"
+    );
     assert_eq!(err.description(), "missing fields in config file");
 }
 
@@ -175,8 +176,10 @@ pub fn incomplete_rss() {
 pub fn liquid_error() {
     let err = run_test("liquid_error");
     assert!(err.is_err());
-    assert_contains!(format!("{}", err.unwrap_err().display_chain()),
-                     "{{{ is not a valid identifier");
+    assert_contains!(
+        format!("{}", err.unwrap_err().display_chain()),
+        "Invalid identifier"
+    );
 }
 
 #[test]
@@ -190,8 +193,8 @@ pub fn no_extends_error() {
     assert!(err.is_err());
     assert_contains!(
         format!("{}", err.unwrap_err().display_chain()),
-        "Layout default_nonexistent.liquid can not be read (defined in \
-                   \"index.html\")"
+        "Layout default_nonexistent.liquid does not exist (referenced in \
+         \"index.html\")"
     );
 }
 
@@ -236,6 +239,11 @@ pub fn yaml_error() {
 #[test]
 pub fn excerpts() {
     run_test("excerpts").unwrap();
+}
+
+#[test]
+pub fn excerpts_crlf() {
+    run_test("excerpts_CRLF").unwrap();
 }
 
 #[test]

@@ -45,11 +45,11 @@ pub fn log_levels_trace() {
     assert_cli::Assert::command(&[&BIN, "build", "-L", "trace", "-d", &dest_param])
         .current_dir(CWD.join("tests/fixtures/example"))
         .stderr()
-        .contains("[trace]")
+        .contains("TRACE")
         .stderr()
-        .contains("[debug]")
+        .contains("DEBUG")
         .stderr()
-        .contains("[info]")
+        .contains("INFO")
         .unwrap();
 
     destdir.close().unwrap();
@@ -67,11 +67,11 @@ pub fn log_levels_trace_alias() {
     assert_cli::Assert::command(&[&BIN, "build", "--trace", "-d", &dest_param])
         .current_dir(CWD.join("tests/fixtures/example"))
         .stderr()
-        .contains("[trace]")
+        .contains("TRACE")
         .stderr()
-        .contains("[debug]")
+        .contains("DEBUG")
         .stderr()
-        .contains("[info]")
+        .contains("INFO")
         .unwrap();
 
     destdir.close().unwrap();
@@ -161,17 +161,10 @@ pub fn clean() {
     assert_eq!(destdir.path().is_dir(), false);
 }
 
-#[cfg(not(windows))]
 #[test]
-pub fn clean_warning() {
+pub fn clean_empty() {
     assert_cli::Assert::command(&[&BIN, "clean"])
         .current_dir(CWD.join("tests/fixtures/example"))
-        .fails_with(1)
-        .stderr()
-        .contains(
-            "Attempting to delete current directory, Cancelling the \
-              operation",
-        )
         .unwrap();
 }
 
