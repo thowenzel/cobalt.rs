@@ -1,0 +1,11 @@
+[default.extend-identifiers]
+tak1n = "tak1n"
+# Test data
+tItLeIzE = "tItLeIzE"
+sLuG = "sLuG"
+
+[default.extend-words]
+# flate crate
+flate = "flate"
+# A person's handle
+nott = "nott"

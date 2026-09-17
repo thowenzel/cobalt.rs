@@ -1,124 +1,94 @@
-use std::env;
+use std::io::Write;
+use std::path;
 
-use clap;
-use env_logger;
-use log;
+use anyhow::Context as _;
 
-use cobalt;
-use error::*;
+use crate::error::Result;
 
+#[derive(Clone, Debug, PartialEq, Eq, clap::Args)]
+pub(crate) struct ConfigArgs {
+    /// Config file to use [default: _cobalt.yml]
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<path::PathBuf>,
 
-pub fn get_config_args() -> Vec<clap::Arg<'static, 'static>> {
-    [clap::Arg::with_name("config")
-         .short("c")
-         .long("config")
-         .value_name("FILE")
-         .help("Config file to use [default: _cobalt.yml]")
-         .takes_value(true),
-     clap::Arg::with_name("destination")
-         .short("d")
-         .long("destination")
-         .value_name("DIR")
-         .help("Site destination folder [default: ./]")
-         .takes_value(true),
-     clap::Arg::with_name("drafts")
-         .long("drafts")
-         .help("Include drafts.")
-         .takes_value(false),
-     clap::Arg::with_name("no-drafts")
-         .long("no-drafts")
-         .help("Ignore drafts.")
-         .conflicts_with("drafts")
-         .takes_value(false),
-     clap::Arg::with_name("dump")
-         .long("dump")
-         .possible_values(&cobalt::Dump::variants())
-         .help("Dump the specified internal state")
-         .multiple(true)
-         .takes_value(true)]
-        .to_vec()
+    /// Include drafts.
+    #[arg(long)]
+    drafts: bool,
+
+    /// Ignore drafts.
+    #[arg(long, conflicts_with = "drafts")]
+    no_drafts: bool,
 }
 
-pub fn get_config(matches: &clap::ArgMatches) -> Result<cobalt::ConfigBuilder> {
-    let config_path = matches.value_of("config");
+impl ConfigArgs {
+    pub(crate) fn load_config(&self) -> Result<cobalt_config::Config> {
+        let config_path = self.config.as_deref();
 
-    // Fetch config information if available
-    let mut config = if let Some(config_path) = config_path {
-        cobalt::ConfigBuilder::from_file(config_path)
-            .chain_err(|| format!("Error reading config file {:?}", config_path))?
-    } else {
-        let cwd = env::current_dir().expect("How does this fail?");
-        cobalt::ConfigBuilder::from_cwd(cwd)?
-    };
+        // Fetch config information if available
+        let mut config = if let Some(config_path) = config_path {
+            cobalt_config::Config::from_file(config_path).with_context(|| {
+                anyhow::format_err!("Error reading config file {}", config_path.display())
+            })?
+        } else {
+            cobalt_config::Config::from_cwd(".")?
+        };
 
-    config.abs_dest = matches.value_of("destination").map(str::to_string);
+        if let Some(drafts) = self.drafts() {
+            config.include_drafts = drafts;
+        }
 
-    if matches.is_present("drafts") {
-        config.include_drafts = true;
-    }
-    if matches.is_present("no-drafts") {
-        config.include_drafts = false;
-    }
-
-    if matches.is_present("dump") {
-        let mut dump = values_t!(matches, "dump", cobalt::Dump)?;
-        config.dump.append(&mut dump);
-        info!("Setting: {:?}", config.dump);
+        Ok(config)
     }
 
-    Ok(config)
+    pub(crate) fn drafts(&self) -> Option<bool> {
+        resolve_bool_arg(self.drafts, self.no_drafts)
+    }
 }
 
-pub fn get_logging_args() -> Vec<clap::Arg<'static, 'static>> {
-    [clap::Arg::with_name("log-level")
-         .short("L")
-         .long("log-level")
-         .possible_values(&["error", "warn", "info", "debug", "trace", "off"])
-         .help("Log level [default: info]")
-         .global(true)
-         .takes_value(true),
-     clap::Arg::with_name("trace")
-         .long("trace")
-         .help("Log ultra-verbose (trace level) information")
-         .global(true)
-         .takes_value(false),
-     clap::Arg::with_name("silent")
-         .long("silent")
-         .help("Suppress all output")
-         .global(true)
-         .takes_value(false)]
-        .to_vec()
+fn resolve_bool_arg(yes: bool, no: bool) -> Option<bool> {
+    match (yes, no) {
+        (true, false) => Some(true),
+        (false, true) => Some(false),
+        (false, false) => None,
+        (_, _) => unreachable!("clap should make this impossible"),
+    }
 }
 
-pub fn get_logging(global_matches: &clap::ArgMatches,
-                   matches: &clap::ArgMatches)
-                   -> Result<env_logger::LogBuilder> {
-    let format = |record: &log::LogRecord| {
-        let level = format!("[{}]", record.level()).to_lowercase();
-        format!("{:8} {}", level, record.args())
-    };
+pub(crate) fn init_logging(
+    level: clap_verbosity_flag::Verbosity<clap_verbosity_flag::InfoLevel>,
+    colored: bool,
+) {
+    if let Some(level) = level.log_level() {
+        let mut builder = env_logger::Builder::new();
+        builder.write_style(if colored {
+            env_logger::WriteStyle::Always
+        } else {
+            env_logger::WriteStyle::Never
+        });
 
-    let mut builder = env_logger::LogBuilder::new();
-    builder.format(format);
+        builder.filter(None, level.to_level_filter());
 
-    match matches
-              .value_of("log-level")
-              .or_else(|| global_matches.value_of("log-level")) {
-        Some("error") => builder.filter(None, log::LogLevelFilter::Error),
-        Some("warn") => builder.filter(None, log::LogLevelFilter::Warn),
-        Some("debug") => builder.filter(None, log::LogLevelFilter::Debug),
-        Some("trace") => builder.filter(None, log::LogLevelFilter::Trace),
-        Some("off") => builder.filter(None, log::LogLevelFilter::Off),
-        Some("info") | _ => builder.filter(None, log::LogLevelFilter::Info),
-    };
+        if level == log::LevelFilter::Trace {
+            builder.format_timestamp_secs();
+        } else {
+            builder.format(move |f, record| {
+                let level = record.level();
+                let args = record.args();
+                match record.level() {
+                    log::Level::Error => writeln!(f, "{ERROR}{level}{ERROR:#}: {args}"),
+                    log::Level::Warn => writeln!(f, "{WARN}{level}{WARN:#}: {args}"),
+                    log::Level::Info => writeln!(f, "{args}"),
+                    log::Level::Debug => writeln!(f, "{DEBUG}{level}{DEBUG:#}: {args}"),
+                    log::Level::Trace => writeln!(f, "{TRACE}{level}{TRACE:#}: {args}"),
+                }
+            });
+        }
 
-    if matches.is_present("trace") {
-        builder.filter(None, log::LogLevelFilter::Trace);
+        builder.init();
     }
-
-    if matches.is_present("silent") {
-        builder.filter(None, log::LogLevelFilter::Off);
-    }
-
-    Ok(builder)
 }
+
+const ERROR: anstyle::Style = anstyle::AnsiColor::Red.on_default().bold();
+const WARN: anstyle::Style = anstyle::AnsiColor::Yellow.on_default();
+const DEBUG: anstyle::Style = anstyle::AnsiColor::Blue.on_default();
+const TRACE: anstyle::Style = anstyle::AnsiColor::Cyan.on_default();

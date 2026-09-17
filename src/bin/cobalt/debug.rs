@@ -1,61 +1,125 @@
-use clap;
-use cobalt;
+use crate::args;
+use crate::error::Result;
+#[cfg(feature = "syntax-highlight")]
+use std::path::PathBuf;
 
-use args;
-use error::*;
+/// Print site debug information
+#[derive(Clone, Debug, PartialEq, Eq, clap::Subcommand)]
+pub(crate) enum DebugCommands {
+    /// Prints post-processed config
+    Config {
+        #[command(flatten, next_help_heading = "Config")]
+        config: args::ConfigArgs,
+    },
 
-pub fn debug_command_args() -> clap::App<'static, 'static> {
-    clap::SubCommand::with_name("debug")
-        .about("Print site debug information")
-        .subcommand(clap::SubCommand::with_name("highlight")
-                        .about("Print syntax-highlight information")
-                        .subcommand(clap::SubCommand::with_name("themes"))
-                        .subcommand(clap::SubCommand::with_name("syntaxes")))
-        .subcommand(clap::SubCommand::with_name("files")
-                        .about("Print files associated with a collection")
-                        .args(&args::get_config_args())
-                        .arg(clap::Arg::with_name("COLLECTION")
-                                 .help("Collection name")
-                                 .index(1)))
+    /// Print syntax-highlight information
+    #[command(subcommand)]
+    Highlight(HighlightCommands),
+
+    /// Print files associated with a collection
+    Files {
+        /// Collection name
+        collection: Option<String>,
+
+        #[command(flatten, next_help_heading = "Config")]
+        config: args::ConfigArgs,
+    },
 }
 
-pub fn debug_command(matches: &clap::ArgMatches) -> Result<()> {
-    match matches.subcommand() {
-        ("highlight", Some(matches)) => {
-            match matches.subcommand() {
-                ("themes", _) => {
-                    for name in cobalt::list_syntax_themes() {
-                        println!("{}", name);
-                    }
-                }
-                ("syntaxes", _) => {
-                    for name in cobalt::list_syntaxes() {
-                        println!("{}", name);
-                    }
-                }
-                _ => bail!(matches.usage()),
-            }
-        }
-        ("files", Some(matches)) => {
-            let config = args::get_config(matches)?;
-            let config = config.build()?;
-            let collection = matches.value_of("COLLECTION");
-            match collection {
-                Some("assets") => {
-                    for file_path in config.assets.files() {
-                        println!("{:?}", file_path);
-                    }
-                }
-                None => {
-                    bail!("Must specify collection");
-                }
-                _ => {
-                    bail!("Collection is not yet supported");
-                }
-            }
-        }
-        _ => bail!(matches.usage()),
-    }
+#[derive(Clone, Debug, PartialEq, Eq, clap::Subcommand)]
+pub(crate) enum HighlightCommands {
+    Themes {
+        #[command(flatten, next_help_heading = "Config")]
+        config: args::ConfigArgs,
+    },
+    Syntaxes {
+        #[command(flatten, next_help_heading = "Config")]
+        config: args::ConfigArgs,
+    },
 
-    Ok(())
+    /// Save the css file for a theme
+    #[cfg(feature = "syntax-highlight")]
+    SaveThemeCss {
+        #[command(flatten, next_help_heading = "Config")]
+        config: args::ConfigArgs,
+
+        /// Name of the theme to generate a css file for
+        name: String,
+
+        /// Path of the css file
+        path: PathBuf,
+    },
+}
+
+impl DebugCommands {
+    pub(crate) fn run(&self) -> Result<()> {
+        match self {
+            Self::Config { config } => {
+                let config = config.load_config()?;
+                let config = cobalt::cobalt_model::Config::from_config(config)?;
+                println!("{config}");
+            }
+            Self::Highlight(HighlightCommands::Themes { config }) => {
+                let config = config.load_config()?;
+                let config = cobalt::cobalt_model::Config::from_config(config)?;
+                for name in config.syntax.themes() {
+                    println!("{name}");
+                }
+            }
+            Self::Highlight(HighlightCommands::Syntaxes { config }) => {
+                let config = config.load_config()?;
+                let config = cobalt::cobalt_model::Config::from_config(config)?;
+                for name in config.syntax.syntaxes() {
+                    println!("{name}");
+                }
+            }
+            #[cfg(feature = "syntax-highlight")]
+            Self::Highlight(HighlightCommands::SaveThemeCss { config, name, path }) => {
+                let config = config.load_config()?;
+                let config = cobalt::cobalt_model::Config::from_config(config)?;
+                if name == engarde::Syntax::css_theme_name() || !config.syntax.has_theme(name) {
+                    return Err(anyhow::anyhow!("Unknown theme: {name}"));
+                }
+
+                let css = config.syntax.css_for_theme(name);
+
+                std::fs::write(path, css)?;
+
+                println!(
+                    "CSS theme '{name}' successfully saved to: {}",
+                    path.display()
+                );
+            }
+            Self::Files { collection, config } => {
+                let config = config.load_config()?;
+                let config = cobalt::cobalt_model::Config::from_config(config)?;
+
+                match collection.as_deref() {
+                    Some("assets") => {
+                        anyhow::bail!("TODO Re-implement");
+                    }
+                    Some("pages") => {
+                        anyhow::bail!("TODO Re-implement");
+                    }
+                    Some("posts") => {
+                        anyhow::bail!("TODO Re-implement");
+                    }
+                    None => {
+                        let source_files = cobalt_core::Source::new(
+                            &config.source,
+                            config.ignore.iter().map(|s| s.as_str()),
+                        )?;
+                        for path in source_files.iter() {
+                            println!("{}", path.rel_path);
+                        }
+                    }
+                    _ => {
+                        anyhow::bail!("Collection is not yet supported");
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

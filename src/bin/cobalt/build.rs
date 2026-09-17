@@ -1,129 +1,90 @@
 use std::env;
 use std::fs;
-use std::path;
 
-use clap;
-use cobalt;
-use ghp;
+use crate::args;
+use crate::error::Result;
 
-use args;
-use error::*;
+/// Build the cobalt project at the source dir
+#[derive(Clone, Debug, PartialEq, Eq, clap::Args)]
+pub(crate) struct BuildArgs {
+    /// Site destination folder [default: ./_site]
+    #[arg(short, long, value_name = "DIR", help_heading = "Config")]
+    destination: Option<std::path::PathBuf>,
 
-pub fn build_command_args() -> clap::App<'static, 'static> {
-    clap::SubCommand::with_name("build")
-        .about("build the cobalt project at the source dir")
-        .args(&args::get_config_args())
-        .arg(clap::Arg::with_name("import")
-                 .short("i")
-                 .long("import")
-                 .help("Import after build to gh-pages branch")
-                 .takes_value(false))
-        .arg(clap::Arg::with_name("branch")
-                 .short("b")
-                 .long("branch")
-                 .value_name("BRANCH")
-                 .help("Branch that will be used to import the site to")
-                 .default_value("gh-pages")
-                 .takes_value(true))
-        .arg(clap::Arg::with_name("message")
-                 .short("m")
-                 .long("message")
-                 .value_name("COMMIT-MESSAGE")
-                 .help("Commit message that will be used on import")
-                 .default_value("cobalt site import")
-                 .takes_value(true))
+    #[command(flatten, next_help_heading = "Config")]
+    pub(crate) config: args::ConfigArgs,
 }
 
-pub fn build_command(matches: &clap::ArgMatches) -> Result<()> {
-    let config = args::get_config(matches)?;
-    let config = config.build()?;
+impl BuildArgs {
+    pub(crate) fn run(&self) -> Result<()> {
+        let mut config = self.config.load_config()?;
+        config.abs_dest = self
+            .destination
+            .as_deref()
+            .map(|d| {
+                fs::create_dir_all(d)?;
+                dunce::canonicalize(d)
+            })
+            .transpose()?;
 
-    build(&config)?;
-    info!("Build successful");
+        let config = cobalt::cobalt_model::Config::from_config(config)?;
 
-    if matches.is_present("import") {
-        let branch = matches.value_of("branch").unwrap().to_string();
-        let message = matches.value_of("message").unwrap().to_string();
-        import(&config, &branch, &message)?
+        build(config)?;
+        log::info!("Build successful");
+
+        Ok(())
     }
-
-    Ok(())
 }
 
-pub fn build(config: &cobalt::Config) -> Result<()> {
-    info!("Building from {:?} into {:?}",
-          config.source,
-          config.destination);
+pub(crate) fn build(config: cobalt::Config) -> Result<()> {
+    log::info!(
+        "Building from `{}` into `{}`",
+        config.source.display(),
+        config.destination.display()
+    );
     cobalt::build(config)?;
 
     Ok(())
 }
 
-pub fn clean_command_args() -> clap::App<'static, 'static> {
-    clap::SubCommand::with_name("clean")
-        .about("cleans directory set as destination")
-        .args(&args::get_config_args())
+/// Cleans `destination` directory
+#[derive(Clone, Debug, PartialEq, Eq, clap::Args)]
+pub(crate) struct CleanArgs {
+    #[command(flatten, next_help_heading = "Config")]
+    pub(crate) config: args::ConfigArgs,
 }
 
-pub fn clean_command(matches: &clap::ArgMatches) -> Result<()> {
-    let config = args::get_config(matches)?;
-    let config = config.build()?;
+impl CleanArgs {
+    pub(crate) fn run(&self) -> Result<()> {
+        let config = self.config.load_config()?;
+        let config = cobalt::cobalt_model::Config::from_config(config)?;
 
-    let cwd = env::current_dir().unwrap_or_else(|_| path::PathBuf::new());
-    let destdir = config
-        .destination
-        .canonicalize()
-        .unwrap_or_else(|_| path::PathBuf::new());
+        clean(&config)
+    }
+}
+
+pub(crate) fn clean(config: &cobalt::Config) -> Result<()> {
+    let cwd = env::current_dir().unwrap_or_default();
+    let destdir = dunce::canonicalize(&config.destination);
+    let destdir = match destdir {
+        Ok(destdir) => destdir,
+        Err(e) => {
+            log::debug!("No `{}` to clean", config.destination.display());
+            log::debug!("{e}");
+            return Ok(());
+        }
+    };
     if cwd.starts_with(&destdir) {
-        bail!("Attempting to delete current directory, \
-                       Cancelling the operation");
+        anyhow::bail!(
+            "Attempting to delete current directory ({:?}), \
+             Cancelling the operation",
+            destdir
+        );
     }
 
     fs::remove_dir_all(&destdir)?;
 
-    info!("directory \"{:?}\" removed", &destdir);
-
-    Ok(())
-}
-
-pub fn import_command_args() -> clap::App<'static, 'static> {
-    clap::SubCommand::with_name("import")
-        .about("moves the contents of the dest folder to the gh-pages branch")
-        .args(&args::get_config_args())
-        .arg(clap::Arg::with_name("branch")
-                 .short("b")
-                 .long("branch")
-                 .value_name("BRANCH")
-                 .help("Branch that will be used to import the site to")
-                 .default_value("gh-pages")
-                 .takes_value(true))
-        .arg(clap::Arg::with_name("message")
-                 .short("m")
-                 .long("message")
-                 .value_name("COMMIT-MESSAGE")
-                 .help("Commit message that will be used on import")
-                 .default_value("cobalt site import")
-                 .takes_value(true))
-}
-
-pub fn import_command(matches: &clap::ArgMatches) -> Result<()> {
-    let config = args::get_config(matches)?;
-    let config = config.build()?;
-
-    let branch = matches.value_of("branch").unwrap().to_string();
-    let message = matches.value_of("message").unwrap().to_string();
-    import(&config, &branch, &message)?;
-
-    Ok(())
-}
-
-fn import(config: &cobalt::Config, branch: &str, message: &str) -> Result<()> {
-    info!("Importing {:?} to {}", config.destination, branch);
-
-    if !config.destination.is_dir() {
-        bail!("`{:?}` is not a directory", config.destination);
-    }
-    ghp::import_dir(&config.destination, branch, message)?;
+    log::info!("directory `{}` removed", destdir.display());
 
     Ok(())
 }

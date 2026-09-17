@@ -1,12 +1,2 @@
-/target
-/build
-
-.DS_Store
-*.rs.bk
-
-.*.swp
-/.vscode
-
-# IntelliJ files
-/.idea
-*.iml
+target
+coverage

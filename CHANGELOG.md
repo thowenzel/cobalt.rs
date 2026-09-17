@@ -1,5 +1,483 @@
-<a name="0.11.1"></a>
-## 0.11.1 (2018-01-10)
+# Change Log
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/)
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+<!-- next-header -->
+## [Unreleased] - ReleaseDate
+
+## [0.20.4] - 2026-02-19
+
+### Fixes
+
+- *(new)* Infer the users intent when `--file` is meant to override the file name and not be a directory
+
+## [0.20.3] - 2026-02-02
+
+## [0.20.2] - 2025-10-01
+
+### Features
+
+- Add `css` theme
+- Add `cobalt debug highlight save-theme-css` for generating CSS for the `css` theme
+
+## [0.20.1] - 2025-09-25
+
+### Features
+
+- Include tags and categories in CSS
+
+## [0.20.0] - 2025-04-10
+
+### Changes
+
+- Switched from libsass to grass
+
+## [0.19.12] - 2025-04-10
+
+## [0.19.11] - 2025-04-10
+
+## [0.19.10] - 2025-04-10
+
+### Features
+
+- Attempt aarch64 builds for mac
+
+## [0.19.9] - 2025-03-31
+
+### Fixes
+
+- *(pagination)* Don't panic when `all` paginator has no content
+
+## [0.19.8] - 2025-03-04
+
+### Fixes
+
+- Always include `page.tags`
+
+## [0.19.7] - 2025-02-27
+
+### Compatibility
+
+- MSRV is now 1.85
+
+### Fixes
+
+- *(pagination)* Put posts under the correct category
+
+## [0.19.6] - 2024-08-07
+
+### Fixes
+
+- `cobalt serve` will now work correctly with sitemap
+
+## [0.19.5] - 2024-07-05
+
+### Fixes
+
+- *(build)* List correct default for `--destination`
+- *(serve)* Remove unused `--destination`
+
+## [0.19.4] - 2024-07-05
+
+## [0.19.3] - 2024-04-15
+
+### Compatibility
+
+- MSRV is now 1.76.0
+
+### Fixes
+
+- `cobalt serve -c <file>` should now work
+- Cleaned up error messages
+
+## [0.19.2] - 2024-02-28
+
+## [0.19.1] - 2024-02-28
+
+### Compatibility
+
+- MSRV is now 1.73
+
+### Fixes
+
+- Put the base url for `cobalt serve` at `/` to work with tunnelling
+
+## [0.19.0] - 2023-06-06
+
+### Compatibility
+
+- Removed support for vimwiki (parser/renderer was unmaintained)
+- MSRV is now 1.70.0
+
+## [0.18.5] - 2023-06-02
+
+### Fixes
+
+- Include frontmatter tags in jsonfeed
+
+## [0.18.4] - 2023-04-20
+
+### Fixes
+
+- Improve frontmatter parsing errors
+
+### Compatibility
+
+- MSRV is now 1.64.0
+
+## [0.18.3] - 2022-08-26
+
+### Fixes
+
+- Wrap code fences in `<pre><code>` instead of just `<pre>`
+
+## [0.18.2] - 2022-08-26
+
+### Fixes
+
+- Error, instead of panic, on bad CWD
+
+## [0.18.1] - 2022-08-24
+
+### Features
+
+- Loading of custom syntaxes in `_syntaxes/`
+
+### Fixes
+
+- Report theme errors for markdown, like liquid
+- Consistently handle theme between markdown and liquid
+
+## [0.18.0] - 2022-06-15
+
+### Compatibility
+
+- `cobalt import` was dropped (#969)
+
+### Features
+
+- `cobalt new --edit` support (#967)
+
+### Fixes
+
+- Respect `enabled` with liquid syntax highlighting (#973)
+- *(build)* Don't stop build when binary file in `_include` (#1033)
+- *(serve)* Serve from a temp directory to avoid corrupting a production build (#968)
+- *(serve)* Pick an unused port  (#971)
+- Improved panic behavior
+
+## [0.17.5] - 2021-12-09
+
+### Features
+
+- `site.time` is added
+
+## [0.17.4] - 2021-09-14
+
+## [0.17.3] - 2021-09-14
+
+## [0.17.2] - 2021-09-14
+
+## [0.17.1] - 2021-09-13
+
+## [0.17.0] - 2021-09-13
+
+#### Features
+
+- Allow disabling of templating
+- vimwiki support
+
+#### Bug Fixes
+
+- Ensure we ignore `--destination` when building
+- `cobalt new` creates dir if needed
+
+## [0.16.5] - 2021-05-29
+
+#### Bug Fixes
+
+- Fix XML syntax for RSS
+- Resolve infinite loop on Windows with `cobalt serve`
+
+#### Features
+
+- Minification support for HTML, CSS, and JS
+- Strike through and task list support in Markdown
+
+#### Performance
+
+- Speed up liquid rendering
+
+## 0.16.4 - 2020-10-17
+
+#### Bug Fixes
+
+- Invalid syntax highlighting in some cases (#802)
+
+## 0.16.2 - 2020-08-03
+
+#### Bug Fixes
+
+- **new**: Create a valid `published_date`
+
+## 0.16.1 - 2020-07-28
+
+#### Bug Fixes
+
+- **serv**: Provide content type for 404
+
+## 0.16.0 - 2020-07-15
+
+#### Features
+
+- `where` filter
+
+#### Bug Fixes
+
+- Fixed liquid corner cases to be more conformant
+
+#### Breaking Changes
+
+- `{% include %}` is now strictly Liquid-style rather
+  than Jekyll-style. It takes an expression rather than a bare-word for
+  the path to include.
+
+## 0.15.11 - 2020-03-09
+
+#### Features
+
+* Support opening the page in the browser with `cobalt serve --open`.
+
+## 0.15.10 - 2020-02-24
+
+#### Bug Fixes
+
+* Report mime-type with `cobalt serve` (closes [#732](https://github.com/cobalt-org/cobalt.rs/issues/732)).
+* Fix RSS content when excerpts are disabled (closes [#724](https://github.com/cobalt-org/cobalt.rs/issues/724)).
+
+## 0.15.9 - 2020-02-11
+
+#### Bug Fixes
+
+* Provide a pre-built windows binary
+
+## 0.15.7 - 2020-02-10
+
+#### Bug Fixes
+
+* Fixed "ctrl-c" during `cobalt serve` so that it will not hang.
+
+## 0.15.6 - 2019-11-28
+
+
+#### Bug Fixes
+
+*   Fix windows support ([e5686a07](https://github.com/cobalt-org/cobalt.rs/commit/e5686a07afdbcdb75456be3831e031085f00acdf))
+* **serve:**  All new implementation ([eb454576](https://github.com/cobalt-org/cobalt.rs/commit/eb454576f5ef0000e9ad2b4bba491b1a3116f13a))
+
+
+
+## 0.15.5 - 2019-11-27
+
+
+#### Bug Fixes
+
+* **liquid:**  Upgrade to 0.19 ([95c85bbb](https://github.com/cobalt-org/cobalt.rs/commit/95c85bbb40e19c9cda30f9f205b78fae69f3a361), closes [#656](https://github.com/cobalt-org/cobalt.rs/issues/656))
+* **md:**  Be more conformant ([3841da3d](https://github.com/cobalt-org/cobalt.rs/commit/3841da3db6a85b0568b608679948036c64c650a4))
+* **pagination:**
+  * revamp pagination permalink management ([e041aad2](https://github.com/cobalt-org/cobalt.rs/commit/e041aad29214a77d4e2326af4755ba2169908eb8))
+  * fixes #666 and adjust tests ([9621b31a](https://github.com/cobalt-org/cobalt.rs/commit/9621b31a7cacb2ba3aa4d16c5e552c955d0778c1))
+
+#### Features
+
+*   Add support for sitemap generation ([9b6272d6](https://github.com/cobalt-org/cobalt.rs/commit/9b6272d6b494a7ef4a10990f170b247e48de3399))
+* **liquid-jekyll-filter:**  activate jekyll filters ([5c7c568f](https://github.com/cobalt-org/cobalt.rs/commit/5c7c568fe3f4c48a5cbf4621ab3e8468689020f7))
+* **pagination:**
+  *  Sort by weight ([d197c652](https://github.com/cobalt-org/cobalt.rs/commit/d197c652ec1cff98a8521114448cb1d2320ed01a))
+  *  pagination on dates ([4327ec1a](https://github.com/cobalt-org/cobalt.rs/commit/4327ec1a7b8096ce0b07a79576825b5f41efb3cb))
+  *  indexation by categories ([2c116ae9](https://github.com/cobalt-org/cobalt.rs/commit/2c116ae922274f5496ec9a0c1770a11bcb35a23f))
+
+
+
+## 0.15.3 - 2019-01-31
+
+
+#### Bug Fixes
+
+* **files:**  sort by filename to have a reproducibly walking iterator ([1aa7510b](https://github.com/cobalt-org/cobalt.rs/commit/1aa7510bb742947e1786d5a3e56eecccff126985))
+
+
+
+## 0.15.2 - 2019-01-29
+
+
+#### Features
+
+* **experimental:**  pagination on tags ([1a968352](https://github.com/cobalt-org/cobalt.rs/commit/1a9683524bbc8450dc46c5ddd11f8edfbf794746))
+* **publish:**  move post to `posts` if in `drafts_dir` ([c21ca310](https://github.com/cobalt-org/cobalt.rs/commit/c21ca3103357f42c9d8a94f3edb88d4481e85f47))
+
+
+
+## 0.15.1 - 2019-01-24
+
+
+#### Features
+
+* **publish:**  Auto-prepend date ([95839ac5](https://github.com/cobalt-org/cobalt.rs/commit/95839ac51bfae82a7124b92d774de38088d500ca), closes [#562](https://github.com/cobalt-org/cobalt.rs/issues/562))
+
+#### Bug Fixes
+
+* **liquid:**  Raw/comment improved ([fe795248](https://github.com/cobalt-org/cobalt.rs/commit/fe795248baad055f0f20640f82967c84ba2fd8d9))
+
+
+
+## 0.15.0 - 2018-12-28
+
+
+#### Bug Fixes
+
+* **new:**  Generate files using jekyll frontmatter format ([bb3b31ae](https://github.com/cobalt-org/cobalt.rs/commit/bb3b31aeb6f72059d327f9fc80c219626546c742))
+
+#### Breaking Changes
+
+* **liquid:**  Upgrade ([b9981489](https://github.com/cobalt-org/cobalt.rs/commit/b9981489ffec4e39a6e5b2e61a45aedd75911fba), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+
+#### Performance
+
+* **liquid:**  Upgrade ([b9981489](https://github.com/cobalt-org/cobalt.rs/commit/b9981489ffec4e39a6e5b2e61a45aedd75911fba), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+
+#### Features
+
+* **liquid:**  Upgrade ([b9981489](https://github.com/cobalt-org/cobalt.rs/commit/b9981489ffec4e39a6e5b2e61a45aedd75911fba), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+* **tags:**  support `tags` in frontmatter ([59db868a](https://github.com/cobalt-org/cobalt.rs/commit/59db868a393f2e0fd1d4a818a7e0c3eca9612210))
+
+
+
+## 0.14.0 - 2018-11-18
+
+
+#### Performance
+
+*   Switch to system allocator ([c0db5ac1](https://github.com/cobalt-org/cobalt.rs/commit/c0db5ac1da9282d352ba9950f6d01871d373fd73))
+
+#### Features
+
+*   Jekyll-style frontmatter divider ([ad62b2fd](https://github.com/cobalt-org/cobalt.rs/commit/ad62b2fddec662d202cd59ad702650a62935f9dd), closes [#431](https://github.com/cobalt-org/cobalt.rs/issues/431))
+* **liquid:**  ([4ef1eded](https://github.com/cobalt-org/cobalt.rs/commit/4ef1eded4968eb1b8956b166c164d95077885e50), [a1d0006f](https://github.com/cobalt-org/cobalt.rs/commit/a1d0006fef22cc07051cfc47f80e810b9312292a))
+  * Index by variables
+  * `for` block parameters can be variables
+  * New filters: `at_most`, `at_least`, `push`, `pop`, `unshift`, `shift`, `array_to_sentence_string`
+  * New tags: `tablerow`, `ifchanged`, `increment`, `decerement`
+  * Slightly improved error reporting
+  * Arrays now have `.first` and `.last` variables
+  * `if` conditions support `or`/`and`
+* **pagination (prototype):**
+  *  core logic ([da6360d2](https://github.com/cobalt-org/cobalt.rs/commit/da6360d223d5e9ac80516b66b9cb0c43bc6dff91))
+  *  pagination frontmatter ([f35eec22](https://github.com/cobalt-org/cobalt.rs/commit/f35eec22618f84ab0222afc90130c5e8cb666d21))
+
+#### Breaking Changes
+
+* Empty frontmatters followed by `---` will no longer build ([ad62b2fd](https://github.com/cobalt-org/cobalt.rs/commit/ad62b2fddec662d202cd59ad702650a62935f9dd), closes [#431](https://github.com/cobalt-org/cobalt.rs/issues/431))
+* **liquid:**  `for` block ranges are now inclusive ([4ef1eded](https://github.com/cobalt-org/cobalt.rs/commit/4ef1eded4968eb1b8956b166c164d95077885e50))
+
+#### Bug Fixes
+
+* **liquid:**  ([4ef1eded](https://github.com/cobalt-org/cobalt.rs/commit/4ef1eded4968eb1b8956b166c164d95077885e50), [a1d0006f](https://github.com/cobalt-org/cobalt.rs/commit/a1d0006fef22cc07051cfc47f80e810b9312292a))
+  * `for` looping over a range is now inclusive to align with shopify liquid
+  * deeply nested array indexes work again (`a.b[0]`)
+
+## 0.13.2 - 2018-10-05
+
+
+#### Features
+
+* **liquid:**  filter input can index ([5a1eb91a](https://github.com/cobalt-org/cobalt.rs/commit/5a1eb91acd9fe3954949b24ad80588df2f1d636a))
+
+
+
+## 0.13.0 - 2018-10-04
+
+
+#### Features
+
+*   Liquid for-block works on hashes ([68ca7b25](https://github.com/cobalt-org/cobalt.rs/commit/68ca7b25e9a6d946b69718a3946e83cf50bd9f98))
+
+#### Breaking Changes
+
+* **jekyll:**  Split out migration ([673a4cf6](https://github.com/cobalt-org/cobalt.rs/commit/673a4cf6334c7d5d1b5c04ce9da13fc6d62902a2), closes [#438](https://github.com/cobalt-org/cobalt.rs/issues/438), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+
+
+
+## 0.12.2 - 2018-07-21
+
+
+#### Features
+
+* **sass:**
+  *  Enable by default ([5cd0f120](https://github.com/cobalt-org/cobalt.rs/commit/5cd0f12006937a08090b5d2177a2839c06479241))
+  *  add support for Sass's indented syntax ([8ca7cb81](https://github.com/cobalt-org/cobalt.rs/commit/8ca7cb819af8308fc765d9e5d8415ec88de23af9))
+*   add runtime configuration to built in syntax highlighting ([3f73c817](https://github.com/cobalt-org/cobalt.rs/commit/3f73c81748070e690f8e9a3a90b8600bbcfc0cca))
+
+
+
+## 0.12.1 - 2018-03-24
+
+No user-visible change; just working around CI problems.
+
+
+## 0.12.0 - 2018-03-22
+
+This release drops support for migrating from pre-0.11.  Please use 0.11 to migrate first.
+
+#### Performance
+
+* **layouts:**  Switch from lazy to eager loading ([b2cbe13a](https://github.com/cobalt-org/cobalt.rs/commit/b2cbe13aaa1ee25b4f7710230a2a6c350e545381))
+
+#### Features
+
+* **`new`:**
+  *  Load default files from disk ([3382901c](https://github.com/cobalt-org/cobalt.rs/commit/3382901c15634191e7358bbeb3e9c83cd18a97f0), closes [#355](https://github.com/cobalt-org/cobalt.rs/issues/355))
+  *  `--with-ext` to specify type without `--file` ([1fd83fce](https://github.com/cobalt-org/cobalt.rs/commit/1fd83fce544b2178f4f6e9b4438a8f5c5b861f84))
+* New `rename` subcommand ([1fee0775](https://github.com/cobalt-org/cobalt.rs/commit/1fee0775295b644c68f5464696ecc5ffaf3e2342), closes [#393](https://github.com/cobalt-org/cobalt.rs/issues/393))
+* **liquid:**
+  * Add `page.slug` ([46de52e5](https://github.com/cobalt-org/cobalt.rs/commit/46de52e502c51c6f525fe5318a29a7c4c23f06b9))
+  * Basic `compact` support ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+  * Whole number (integer) support ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+  * Provide context on errors ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0), closes [#136](https://github.com/cobalt-org/cobalt.rs/issues/136))
+* **`serve`:** Custom host support ([e654541](https://github.com/cobalt-org/cobalt.rs/commit/e654541dae4a9ef2f74ff115fcc5f5eb16bcddb5))
+* **`debug`:**
+  *  Print pages and posts files ([29d5a74e](https://github.com/cobalt-org/cobalt.rs/commit/29d5a74e4438744332f2719de7b6ae18578c16e0))
+  *  Dump config ([b5ac9c5c](https://github.com/cobalt-org/cobalt.rs/commit/b5ac9c5c0f42dafc84fb991f91aed0fce5f5c3c2))
+* More details available with `--trace` ([0ed5247](https://github.com/cobalt-org/cobalt.rs/commit/0ed5247e896b9b152ef3f24196e49e499fb5ddae))
+
+#### Breaking Changes
+
+* **`migrate`:**  Removing migration support ([20b29932](https://github.com/cobalt-org/cobalt.rs/commit/20b29932f794b17fe71b467fb3d05901982cc331))
+* **`import`:**  `import` is self-contained ([4e0be270](https://github.com/cobalt-org/cobalt.rs/commit/4e0be270aaaef92a4b9638b170a3acfcd96ae0a3), closes [#394](https://github.com/cobalt-org/cobalt.rs/issues/394))
+* **layouts:**  Switch from lazy to eager ([b2cbe13a](https://github.com/cobalt-org/cobalt.rs/commit/b2cbe13aaa1ee25b4f7710230a2a6c350e545381))
+* **liquid:**
+  * Whole number (integer) support ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+  * Improve value coercion ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+
+#### Bug Fixes
+
+* **`clean`:**  Don't error on double-clean ([a380fd15](https://github.com/cobalt-org/cobalt.rs/commit/a380fd15fb400eb1074a06e5d779345154d7b3be))
+* **`import`:** `import` is self-contained ([4e0be270](https://github.com/cobalt-org/cobalt.rs/commit/4e0be270aaaef92a4b9638b170a3acfcd96ae0a3), closes [#394](https://github.com/cobalt-org/cobalt.rs/issues/394))
+* **`new`:**
+  *  Dont assume dirs are files ([35bed0c5](https://github.com/cobalt-org/cobalt.rs/commit/35bed0c5e2461176ff90689e793d08b1924747f5), closes [#401](https://github.com/cobalt-org/cobalt.rs/issues/401))
+  *  Error if file isn't a part of a collection ([99a0d017](https://github.com/cobalt-org/cobalt.rs/commit/99a0d017ce5260ac27d23665d39f6b389dced729))
+* **`serve`:** Fix site.base_url by adding http:// ([1a3ae383](https://github.com/cobalt-org/cobalt.rs/commit/1a3ae383910cd799605567db6182244b33bd098c))
+* **slug:**  Dont ignore non-ascii in slug ([08f0621c](https://github.com/cobalt-org/cobalt.rs/commit/08f0621cd94fb4be0cde9c999a4a5b2d72691864), closes [#383](https://github.com/cobalt-org/cobalt.rs/issues/383))
+* **liquid:**
+  * `date_in_tz` correctly parse date strings ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+  * Improve value coercion ([8fca4340](https://github.com/cobalt-org/cobalt.rs/commit/8fca43406de568f9d163e70077f25267cc1b46a0))
+  * `if` can do existence check again ([0ed5247](https://github.com/cobalt-org/cobalt.rs/commit/0ed5247e896b9b152ef3f24196e49e499fb5ddae))
+* **config**: Bug fixes with `ignore` ([0ed5247](https://github.com/cobalt-org/cobalt.rs/commit/0ed5247e896b9b152ef3f24196e49e499fb5ddae))
+
+
+## 0.11.1 - 2018-01-10
 
 
 #### Features
@@ -8,8 +486,7 @@
 
 
 
-<a name="0.11.0"></a>
-## 0.11.0 (2018-01-09)
+## 0.11.0 - 2018-01-09
 
 This release focused on unleashing a lot of breaking changes that have been
 stacking up for a while which also expose a lot of features that have been
@@ -28,9 +505,9 @@ this.
 *   Migrate support for changing _layouts to _includes ([28ae870d](https://github.com/cobalt-org/cobalt.rs/commit/28ae870dab175264a87d1b1020bcbf23c85a60c1))
 * **config:**
   *  Change .cobalt.yml to _cobalt.yml ([c4ee83b3](https://github.com/cobalt-org/cobalt.rs/commit/c4ee83b3f5f60410c3e53cc8d14271d9e8c0f42f), closes [#348](https://github.com/cobalt-org/cobalt.rs/issues/348))
-  *  Stablize the format ([34e9d545](https://github.com/cobalt-org/cobalt.rs/commit/34e9d545b03e5696afd05a5922fcee49eacf5ec2), closes [#199](https://github.com/cobalt-org/cobalt.rs/issues/199), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/), [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+  *  Stabilize the format ([34e9d545](https://github.com/cobalt-org/cobalt.rs/commit/34e9d545b03e5696afd05a5922fcee49eacf5ec2), closes [#199](https://github.com/cobalt-org/cobalt.rs/issues/199), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/), [#](https://github.com/cobalt-org/cobalt.rs/issues/))
 * **front:**
-  *  Stablize fronmatter format ([9089c721](https://github.com/cobalt-org/cobalt.rs/commit/9089c721a2910152b6685b497da8af26a37b64e8), closes [#257](https://github.com/cobalt-org/cobalt.rs/issues/257), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+  *  Stabilize fronmatter format ([9089c721](https://github.com/cobalt-org/cobalt.rs/commit/9089c721a2910152b6685b497da8af26a37b64e8), closes [#257](https://github.com/cobalt-org/cobalt.rs/issues/257), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Change date to YYYY-MM-DD ([1e19ae07](https://github.com/cobalt-org/cobalt.rs/commit/1e19ae070dcde429c86212cb6c39e5298c841c92), closes [#349](https://github.com/cobalt-org/cobalt.rs/issues/349), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Change permalink variable names ([e78b806c](https://github.com/cobalt-org/cobalt.rs/commit/e78b806c9561d8ad9bd3b31b5ab161ea2e79faa8), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Change permalink to well-defined format ([c6c4d7ac](https://github.com/cobalt-org/cobalt.rs/commit/c6c4d7aca4e25820a7bf670a38d8c6023c902d5a), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
@@ -52,14 +529,14 @@ this.
 
 `cobalt migrate` was created to help mitigate the cost of most of these breaking changes.
 
-* **config:**  Stablize the format ([34e9d545](https://github.com/cobalt-org/cobalt.rs/commit/34e9d545b03e5696afd05a5922fcee49eacf5ec2), closes [#199](https://github.com/cobalt-org/cobalt.rs/issues/199), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/), [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+* **config:**  Stabilize the format ([34e9d545](https://github.com/cobalt-org/cobalt.rs/commit/34e9d545b03e5696afd05a5922fcee49eacf5ec2), closes [#199](https://github.com/cobalt-org/cobalt.rs/issues/199), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/), [#](https://github.com/cobalt-org/cobalt.rs/issues/))
 * **debug:**  Generalize debug commands ([087d9919](https://github.com/cobalt-org/cobalt.rs/commit/087d99195ae66525445e5ce91246e0757e945214), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
 * **front:**
   *  Change date to YYYY-MM-DD ([1e19ae07](https://github.com/cobalt-org/cobalt.rs/commit/1e19ae070dcde429c86212cb6c39e5298c841c92), closes [#349](https://github.com/cobalt-org/cobalt.rs/issues/349), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Change permalink variable names ([e78b806c](https://github.com/cobalt-org/cobalt.rs/commit/e78b806c9561d8ad9bd3b31b5ab161ea2e79faa8), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Change permalink to well-defined format ([c6c4d7ac](https://github.com/cobalt-org/cobalt.rs/commit/c6c4d7aca4e25820a7bf670a38d8c6023c902d5a), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
   *  Standardize permalink behavior ([6730eb68](https://github.com/cobalt-org/cobalt.rs/commit/6730eb686d083b12c4307a25875ed0a9b7034236), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
-  *  Stablize fronmatter format ([9089c721](https://github.com/cobalt-org/cobalt.rs/commit/9089c721a2910152b6685b497da8af26a37b64e8), closes [#257](https://github.com/cobalt-org/cobalt.rs/issues/257), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
+  *  Stabilize fronmatter format ([9089c721](https://github.com/cobalt-org/cobalt.rs/commit/9089c721a2910152b6685b497da8af26a37b64e8), closes [#257](https://github.com/cobalt-org/cobalt.rs/issues/257), breaks [#](https://github.com/cobalt-org/cobalt.rs/issues/))
 * **page:**
   *  Liquid errors on undefined variables ([2ec3f24b](https://github.com/cobalt-org/cobalt.rs/commit/2ec3f24bb8eb3e7b09eb68209fa39430760d1d18))
     * This was done to help catch migration problems and to move us in the direction of easier debugging of problems
@@ -76,8 +553,7 @@ this.
 
 
 
-<a name="0.10.0"></a>
-## 0.10.0 (2018-01-04)
+## 0.10.0 - 2018-01-04
 
 
 #### Features
@@ -90,15 +566,14 @@ this.
 *   Log context for failures ([be258bfb](https://github.com/cobalt-org/cobalt.rs/commit/be258bfb31bb5a0d7131469eba27b13b82a5256f))
 * **config:**  On empty file, use right root ([a99ca197](https://github.com/cobalt-org/cobalt.rs/commit/a99ca197564cead19c247ca91429077b163cd794))
 * **drafts:**  Config can enable again ([729e0b18](https://github.com/cobalt-org/cobalt.rs/commit/729e0b18fdc9ad5ec173c73d015ff8cb0364a675))
-* **front:**  Ensure exceprt is rendered before used ([9e714697](https://github.com/cobalt-org/cobalt.rs/commit/9e7146979e8df4afaa9bdc1890fe725b0b551bf7))
+* **front:**  Ensure excerpt is rendered before used ([9e714697](https://github.com/cobalt-org/cobalt.rs/commit/9e7146979e8df4afaa9bdc1890fe725b0b551bf7))
 * **includes:**  Support including hidden files ([cb577c42](https://github.com/cobalt-org/cobalt.rs/commit/cb577c42624720740e382c9336510807f67ca0ca))
 
 #### Breaking Changes
 
 * **error:**  Identify layout errors ([0ec3a3d0](https://github.com/cobalt-org/cobalt.rs/commit/0ec3a3d0fbab0d51e20304d3e1a5726e987e36da))
 
-<a name="0.9.0"></a>
-## 0.9.0 (2017-11-30)
+## 0.9.0 - 2017-11-30
 
 
 #### Features
@@ -111,8 +586,7 @@ this.
 
 
 
-<a name="0.8.0"></a>
-## 0.8.0 (2017-11-09)
+## 0.8.0 - 2017-11-09
 
 
 #### Bug Fixes
@@ -122,7 +596,7 @@ this.
   *  Auto-created posts start as drafts ([0cfc1581](https://github.com/cobalt-org/cobalt.rs/commit/0cfc15818c8cb026d90ae127301d5364bd90f262))
 * **watch:**  Rebuilding ignores dest ([b72863b9](https://github.com/cobalt-org/cobalt.rs/commit/b72863b94e904054cb12e8be640cd5e9d0ec27ab))
 *   Auto-ignore dest in more cases ([8676a3a8](https://github.com/cobalt-org/cobalt.rs/commit/8676a3a8c3263212e61c886ce3ff85dc059ee3b1))
-*   Don't ignore dest look-alikes ([33c7d0de](https://github.com/cobalt-org/cobalt.rs/commit/33c7d0dec590e7ac3621a82e32c97c6ae2ed0f69))
+*   Don't ignore dest lookalikes ([33c7d0de](https://github.com/cobalt-org/cobalt.rs/commit/33c7d0dec590e7ac3621a82e32c97c6ae2ed0f69))
 *   source/dest are now relative to config ([ce95b395](https://github.com/cobalt-org/cobalt.rs/commit/ce95b395412888f11ce2ab74d92dd297bbb74d45))
 * **clean:**  Better detect what we can't clean ([78bbfc3e](https://github.com/cobalt-org/cobalt.rs/commit/78bbfc3eb3248c150f9058d5d528022c769abbe7))
 * **cli:**  Clarify role of --destination ([a9fce407](https://github.com/cobalt-org/cobalt.rs/commit/a9fce407ba0a46ffd983819bfd30661acc435298))
@@ -166,8 +640,7 @@ this.
 
 
 
-<a name="0.7.5"></a>
-## 0.7.5 (2017-10-22)
+## 0.7.5 - 2017-10-22
 
 
 #### Bug Fixes
@@ -177,8 +650,7 @@ this.
 
 
 
-<a name="0.7.4"></a>
-## 0.7.4 (2017-10-21)
+## 0.7.4 - 2017-10-21
 
 
 #### Bug Fixes
@@ -191,13 +663,12 @@ this.
 * **data-files:**  Add data file support ([bb2d7c0f](https://github.com/cobalt-org/cobalt.rs/commit/bb2d7c0f3b841a6432bb68f5ccff83d8fe40050e), closes [#256](https://github.com/cobalt-org/cobalt.rs/issues/256))
 * **scss:**  Implement compiling of SCSS files ([76b8d8ae](https://github.com/cobalt-org/cobalt.rs/commit/76b8d8ae665d597151a5386d07bebcb2418a74e6))
 
-<a name="0.7.3"></a>
-## 0.7.3 (2017-10-05)
+## 0.7.3 - 2017-10-05
 
 #### Breaking Changes
 
 * `page.path` now returns non-exploded path. ([7f571a8b](https://github.com/cobalt-org/cobalt.rs/commit/7f571a8bd5b75adcdfc5de103778a210bbc2f5e3))
-* `--dump=liquid` is now split into `--dump=DocObject` and `--dump=DocTermplate` ([3439265b](https://github.com/cobalt-org/cobalt.rs/commit/3439265b64de9c7d87fad5f3c54501e0b33966f0))
+* `--dump=liquid` is now split into `--dump=DocObject` and `--dump=DocTemplate` ([3439265b](https://github.com/cobalt-org/cobalt.rs/commit/3439265b64de9c7d87fad5f3c54501e0b33966f0))
 
 #### Features
 
@@ -214,7 +685,7 @@ this.
 * **watch:**  Ignore dest rather than rebuild ([fce89368](https://github.com/cobalt-org/cobalt.rs/commit/fce8936800eb651e4234293df805a675f2a6fd0b), closes [#170](https://github.com/cobalt-org/cobalt.rs/issues/170))
 
 
-## 0.7.2 (2017-07-04)
+## 0.7.2 - 2017-07-04
 
 #### Bug Fixes
 
@@ -222,7 +693,7 @@ this.
 
 
 
-## 0.7.1 (2017-06-25)
+## 0.7.1 - 2017-06-25
 
 #### Bug Fixes
 
@@ -230,7 +701,7 @@ this.
   *  Show all build failures, not just first ([52916cd8](https://github.com/cobalt-org/cobalt.rs/commit/52916cd8b448e84c691e4d0517b53b287ff56efb))
   *  Re-enable Stable builds on Linux ([24f3b209](https://github.com/cobalt-org/cobalt.rs/commit/24f3b2093580b26a0aef5c9ed81fb53f6fc614d7))
 
-## 0.7.0 (2017-06-24)
+## 0.7.0 - 2017-06-24
 
 #### Bug Fixes
 
@@ -239,7 +710,7 @@ this.
   *  Improve error reporting ([0d379935](https://github.com/cobalt-org/cobalt.rs/commit/0d37993546f1f00733996fbb02719559a201bc5f))
   *  Make it easier to add new tests ([03fdecda](https://github.com/cobalt-org/cobalt.rs/commit/03fdecda29d0659b06eeb24e2817b1376dbe6581))
 * **tests/cli/log_levels:**  Improve comparison error reporting ([334c4d2e](https://github.com/cobalt-org/cobalt.rs/commit/334c4d2e3a2153a2b93bd4a8453c49513283e69a))
-* Stabalize the CI ([5d739b5](https://github.com/cobalt-org/cobalt.rs/commit/5d739b50ddfdf90fb848921681d46d4a4b7e20f6))
+* Stabilize the CI ([5d739b5](https://github.com/cobalt-org/cobalt.rs/commit/5d739b50ddfdf90fb848921681d46d4a4b7e20f6))
 * Upgrade to [liquid-rust 0.10.0](https://github.com/cobalt-org/liquid-rust/releases/tag/v0.10.0) ([2421679](https://github.com/cobalt-org/cobalt.rs/commit/24216795b6c83acff98de1a1fad22f54a00150bb))
 * `cobalt serve` should ignore query strings ([eb9e0b0](https://github.com/cobalt-org/cobalt.rs/commit/eb9e0b05596313ee1213b20ed642777ee0a34139))
 * Gracefully handle empty frontmatters ([5aa5813](https://github.com/cobalt-org/cobalt.rs/commit/5aa5813479c00683e321def73a8b2e6cbc14fa9e))
@@ -288,7 +759,7 @@ this.
 - Added `cobalt watch` ([@LucioFranco][])
 - Added `cobalt new` ([@LucioFranco][])
 - Added `cobalt build --import` ([@LucioFranco][])
-- Moved from _posts to posts ([@johannhof][])
+- Moved from `_posts` to `posts` ([@johannhof][])
 - Ignore underscored directories by default ([@johannhof][])
 - Added an `ignore` attribute to .cobalt.yml ([@jespino][])
 - Implemented custom paths (permalinks) ([@johannhof][])
@@ -307,3 +778,37 @@ this.
 [@nott]: https://github.com/nott
 [@rjgoldsborough]: http://github.com/rjgoldsborough
 [@tak1n]: https://github.com/tak1n
+
+<!-- next-url -->
+[Unreleased]: https://github.com/cobalt-org/cobalt.rs/compare/v0.20.4...HEAD
+[0.20.4]: https://github.com/cobalt-org/cobalt.rs/compare/v0.20.3...v0.20.4
+[0.20.3]: https://github.com/cobalt-org/cobalt.rs/compare/v0.20.2...v0.20.3
+[0.20.2]: https://github.com/cobalt-org/cobalt.rs/compare/v0.20.1...v0.20.2
+[0.20.1]: https://github.com/cobalt-org/cobalt.rs/compare/v0.20.0...v0.20.1
+[0.20.0]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.12...v0.20.0
+[0.19.12]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.11...v0.19.12
+[0.19.11]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.10...v0.19.11
+[0.19.10]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.9...v0.19.10
+[0.19.9]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.8...v0.19.9
+[0.19.8]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.7...v0.19.8
+[0.19.7]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.6...v0.19.7
+[0.19.6]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.5...v0.19.6
+[0.19.5]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.4...v0.19.5
+[0.19.4]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.3...v0.19.4
+[0.19.3]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.2...v0.19.3
+[0.19.2]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.1...v0.19.2
+[0.19.1]: https://github.com/cobalt-org/cobalt.rs/compare/v0.19.0...v0.19.1
+[0.19.0]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.5...v0.19.0
+[0.18.5]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.4...v0.18.5
+[0.18.4]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.3...v0.18.4
+[0.18.3]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.2...v0.18.3
+[0.18.2]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.1...v0.18.2
+[0.18.1]: https://github.com/cobalt-org/cobalt.rs/compare/v0.18.0...v0.18.1
+[0.18.0]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.5...v0.18.0
+[0.17.5]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.4...v0.17.5
+[0.17.4]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.3...v0.17.4
+[0.17.3]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.2...v0.17.3
+[0.17.2]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.1...v0.17.2
+[0.17.1]: https://github.com/cobalt-org/cobalt.rs/compare/v0.17.0...v0.17.1
+[0.17.0]: https://github.com/cobalt-org/cobalt.rs/compare/v0.16.5...v0.17.0
+[0.16.5]: https://github.com/cobalt-org/cobalt.rs/compare/v0.16.4...v0.16.5

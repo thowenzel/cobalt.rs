@@ -1,0 +1,8 @@
+---
+layout: default_nonexistent.liquid
+---
+This is my Index page!
+
+{% for post in collections.posts.pages %}
+ {{ post.title }}
+{% endfor %}

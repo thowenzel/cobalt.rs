@@ -1,9 +1,11 @@
+use std::sync::LazyLock;
+
+use deunicode;
 use itertools::Itertools;
 use regex::Regex;
 
-lazy_static!{
-    static ref SLUG_INVALID_CHARS: Regex = Regex::new(r"([^a-zA-Z0-9]+)").unwrap();
-}
+static SLUG_INVALID_CHARS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"([^a-zA-Z0-9]+)").unwrap());
 
 /// Create a slug for a given file.  Correlates to Jekyll's :slug path tag
 pub fn slugify<S: AsRef<str>>(name: S) -> String {
@@ -11,7 +13,8 @@ pub fn slugify<S: AsRef<str>>(name: S) -> String {
 }
 
 fn slugify_str(name: &str) -> String {
-    let slug = SLUG_INVALID_CHARS.replace_all(name, "-");
+    let name = deunicode::deunicode_with_tofu(name, "-");
+    let slug = SLUG_INVALID_CHARS.replace_all(&name, "-");
     slug.trim_matches('-').to_lowercase()
 }
 
@@ -20,11 +23,10 @@ fn title_case(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
         None => String::new(),
-        Some(f) => {
-            f.to_uppercase()
-                .chain(c.flat_map(|t| t.to_lowercase()))
-                .collect()
-        }
+        Some(f) => f
+            .to_uppercase()
+            .chain(c.flat_map(|t| t.to_lowercase()))
+            .collect(),
     }
 }
 
@@ -39,8 +41,14 @@ fn titleize_slug_str(slug: &str) -> String {
 
 #[test]
 fn test_slugify() {
-    let actual = slugify("___filE-worlD-__09___");
-    assert_eq!(actual, "file-world-09");
+    let actual = slugify("___filE-worldD-__09___");
+    assert_eq!(actual, "file-worldd-09");
+}
+
+#[test]
+fn test_slugify_unicode() {
+    let actual = slugify("__Æneid__北亰-worldD-__09___");
+    assert_eq!(actual, "aeneid-bei-jing-worldd-09");
 }
 
 #[test]
